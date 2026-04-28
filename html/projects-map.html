@@ -2132,10 +2132,27 @@
       }
 
       // Expose to the 3D toggle handler (declared further down in init)
-      state._activate2D = () => activateView(mapView);
-      state._activate3D = () => {
+      state._sceneCamera = SCENE_INITIAL_CAMERA;
+      state._activate2D = async () => {
+        await activateView(mapView);
+        // Re-fit the basin so 2D always opens to the same extent
+        if (state._basinExtent) {
+          mapView.goTo(state._basinExtent, { animate: false }).catch(() => {});
+        }
+      };
+      state._activate3D = async () => {
         if (!sceneView) sceneView = makeSceneView();
-        return activateView(sceneView);
+        await activateView(sceneView);
+        // Always re-anchor the 3D camera to its initial framing — prevents
+        // stale state from previous panning or from resetApp's extent goTo
+        // (which in SceneView would yield a top-down camera).
+        try {
+          await sceneView.goTo({
+            position: SCENE_INITIAL_CAMERA.position,
+            heading: SCENE_INITIAL_CAMERA.heading,
+            tilt: SCENE_INITIAL_CAMERA.tilt,
+          }, { animate: false });
+        } catch (e) { console.warn("3D camera reset failed:", e); }
       };
 
       // Initial activation = 2D
@@ -2670,9 +2687,17 @@
     // Recenter the map and close any popup
     if (state.view) {
       state.view.closePopup();
-      // Re-fit to the whole basin (works in both 2D and 3D)
-      const target = state._basinExtent || { center: [-120.04, 39.09], zoom: 9 };
-      state.view.goTo(target, { duration: 400 });
+      // 2D → fit basin extent; 3D → snap back to initial oblique camera
+      if (state.view.type === "3d" && state._sceneCamera) {
+        state.view.goTo({
+          position: state._sceneCamera.position,
+          heading: state._sceneCamera.heading,
+          tilt: state._sceneCamera.tilt,
+        }, { duration: 400 }).catch(() => {});
+      } else {
+        const target = state._basinExtent || { center: [-120.04, 39.09], zoom: 9 };
+        state.view.goTo(target, { duration: 400 }).catch(() => {});
+      }
     }
     toast("Reset to defaults");
   }
