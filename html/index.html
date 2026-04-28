@@ -36,34 +36,34 @@
 
     /* ── Header ── */
     #app-header {
-      background: var(--eip-navy);
-      color: var(--white);
+      background: var(--white);
+      color: var(--eip-navy);
       display: flex;
       align-items: center;
       gap: 0.85rem;
       padding: 0 1.5rem;
-      height: 56px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      height: 64px;
+      box-shadow: 0 2px 6px rgba(11, 31, 65, 0.12);
+      border-bottom: 1px solid rgba(11, 31, 65, 0.08);
     }
 
     .header-titles { display: flex; flex-direction: column; gap: 2px; }
-    .header-titles .agency {
-      font-size: 0.62rem;
-      font-weight: 400;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      opacity: 0.72;
-    }
     .header-titles h1 {
       font-size: 1.05rem;
       font-weight: 700;
       line-height: 1;
+      color: var(--eip-navy);
     }
     .header-logo {
-      width: 32px; height: 30px;
+      height: 38px;
+      width: auto;
       flex-shrink: 0;
       object-fit: contain;
-      filter: brightness(1.6) saturate(1.1);
+    }
+    .header-divider {
+      width: 1px; height: 24px;
+      background: rgba(11, 31, 65, 0.15);
+      flex-shrink: 0;
     }
 
     /* ── Content ── */
@@ -196,10 +196,10 @@
 <body>
 
   <header id="app-header">
-    <img src="assets/favicon.png" alt="EIP" class="header-logo" />
+    <img src="assets/eip-logo-horizontal.svg" alt="Lake Tahoe Environmental Improvement Program" class="header-logo" />
+    <div class="header-divider"></div>
     <div class="header-titles">
-      <span class="agency">Tahoe Regional Planning Agency</span>
-      <h1>Lake Tahoe EIP</h1>
+      <h1>Tools &amp; Dashboards</h1>
     </div>
   </header>
 

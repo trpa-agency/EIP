@@ -60,58 +60,57 @@
 
     /* ── Header ── */
     #app-header {
-      background: var(--eip-navy);
-      color: var(--white);
+      background: var(--white);
+      color: var(--eip-navy);
       display: flex;
       align-items: center;
       gap: 0.85rem;
       padding: 0 1.25rem;
-      height: 56px;
+      height: 64px;
       flex-shrink: 0;
       z-index: 100;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+      box-shadow: 0 2px 6px rgba(11, 31, 65, 0.12);
+      border-bottom: 1px solid rgba(11, 31, 65, 0.08);
     }
 
     .header-logo {
-      width: 32px; height: 30px;
+      height: 38px;
+      width: auto;
       flex-shrink: 0;
       object-fit: contain;
-      /* Light wash so the navy mountains are visible on the navy bar
-         while the orange water stays vivid */
-      filter: brightness(1.6) saturate(1.1);
     }
 
     .back-link {
-      color: rgba(255,255,255,0.78);
+      color: rgba(11, 31, 65, 0.65);
       text-decoration: none;
       font-size: 0.78rem;
       font-weight: 500;
       transition: color 150ms ease-out;
       white-space: nowrap;
     }
-    .back-link:hover { color: var(--white); }
+    .back-link:hover { color: var(--eip-blue); }
 
     .header-divider {
       width: 1px; height: 24px;
-      background: rgba(255,255,255,0.22);
+      background: rgba(11, 31, 65, 0.15);
       flex-shrink: 0;
     }
 
     .header-titles { display: flex; flex-direction: column; gap: 2px; }
     .header-titles .agency {
       font-size: 0.62rem;
-      font-weight: 400;
+      font-weight: 500;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      opacity: 0.72;
+      color: rgba(11, 31, 65, 0.55);
     }
-    .header-titles h1 { font-size: 1.05rem; font-weight: 700; line-height: 1; }
+    .header-titles h1 { font-size: 1.05rem; font-weight: 700; line-height: 1; color: var(--eip-navy); }
 
     .header-status {
       margin-left: auto;
       font-size: 0.72rem;
       font-weight: 400;
-      color: rgba(255,255,255,0.72);
+      color: rgba(11, 31, 65, 0.6);
       display: flex;
       align-items: center;
       gap: 0.5rem;
@@ -762,11 +761,11 @@
 
   <!-- ── HEADER ── -->
   <header slot="header" id="app-header">
-    <img src="assets/favicon.png" alt="EIP" class="header-logo" />
+    <img src="assets/eip-logo-horizontal.svg" alt="Lake Tahoe Environmental Improvement Program" class="header-logo" />
+    <div class="header-divider"></div>
     <a href="index.html" class="back-link">← Tools</a>
     <div class="header-divider"></div>
     <div class="header-titles">
-      <span class="agency">Lake Tahoe EIP</span>
       <h1>EIP Projects Map</h1>
     </div>
     <div class="header-status">
@@ -781,7 +780,6 @@
       title="About this dashboard"
       scale="s"
       appearance="transparent"
-      style="--calcite-color-text-1: #fff; --calcite-color-text-3: #fff;"
     ></calcite-action>
     <calcite-popover
       reference-element="header-info"
@@ -2054,33 +2052,63 @@
         view.ui.add(printExpand, "top-right");
         view._eipWidgets.push(printExpand);
 
-        // Map Options Expand (top-right, alongside Legend & Print). Pulls
-        // the hidden #layer-controls node into its panel; we rescue it back
-        // to its host on detach so toggle state and event handlers survive.
-        const layerControls = document.getElementById("layer-controls");
-        const layerExpand = new Expand({
-          view,
-          content: layerControls,
-          expanded: false,
-          expandIcon: "sliders-horizontal",
-          expandTooltip: "Map options",
-          collapseTooltip: "Close map options",
-        });
-        view.ui.add(layerExpand, "top-right");
-        view._eipWidgets.push(layerExpand);
-        view._layerExpand = layerExpand;
+        // Three direct toggle actions for map options. No Expand panel —
+        // just three Calcite Actions. Each lights up when its option is
+        // active; click to flip.
+        const makeToggleAction = (icon, label, isActive, onClick) => {
+          const a = document.createElement("calcite-action");
+          a.setAttribute("icon", icon);
+          a.setAttribute("text", label);
+          a.setAttribute("text-enabled", "");
+          a.setAttribute("title", label);
+          a.setAttribute("scale", "s");
+          a.style.background = "var(--white)";
+          if (isActive) a.setAttribute("active", "");
+          a.addEventListener("click", () => onClick(a));
+          view.ui.add(a, "top-right");
+          view._eipWidgets.push(a);
+          return a;
+        };
+
+        // 3D view toggle
+        makeToggleAction("view-mode-3d", "3D view",
+          view.type === "3d",
+          async (btn) => {
+            const goTo3D = !btn.hasAttribute("active");
+            btn.toggleAttribute("active", goTo3D);
+            try {
+              if (goTo3D) await state._activate3D();
+              else        await state._activate2D();
+            } catch (err) {
+              console.error(err);
+              toast("Couldn't switch view", "error");
+              btn.toggleAttribute("active", !goTo3D);
+            }
+          });
+
+        // Cluster toggle
+        makeToggleAction("urban-model", "Cluster points",
+          !!state.clusterOn,
+          (btn) => {
+            const on = !btn.hasAttribute("active");
+            btn.toggleAttribute("active", on);
+            state.clusterOn = on;
+            setClusterEnabled(on);
+          });
+
+        // Footprints toggle
+        makeToggleAction("polygon-vertices", "Show project footprints",
+          !!state.footprintsOn,
+          (btn) => {
+            const on = !btn.hasAttribute("active");
+            btn.toggleAttribute("active", on);
+            state.footprintsOn = on;
+            setFootprintsVisible(on);
+          });
       }
 
       function detachWidgets(view) {
         if (!view._eipWidgets) return;
-        // Rescue the shared #layer-controls node back to its host so that
-        // its child toggles (and their state + listeners) survive the next
-        // Expand re-attach.
-        const layerHost = document.getElementById("layer-controls-host");
-        const layerControls = document.getElementById("layer-controls");
-        if (layerHost && layerControls && layerControls.parentNode !== layerHost) {
-          layerHost.appendChild(layerControls);
-        }
         for (const w of view._eipWidgets) {
           try { view.ui.remove(w); } catch (e) {}
           if (w && typeof w.destroy === "function") {
