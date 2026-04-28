@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lake Tahoe EIP — Tools &amp; Dashboards</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --eip-green:        #6EBE44;
+      --eip-blue:         #007DC3;
+      --eip-orange:       #F16022;
+      --eip-navy:         #0B1F41;
+      --eip-blue-light:   #E0F0FA;
+      --eip-navy-light:   #E6E8EC;
+      --gray-border:      #DDDDDD;
+      --white:            #FFFFFF;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    [hidden] { display: none !important; }
+
+    html, body {
+      min-height: 100%;
+      font-family: 'Lexend Deca', system-ui, sans-serif;
+      color: var(--eip-navy);
+      background: linear-gradient(160deg, #eef2f7 0%, #e4e9f2 100%);
+    }
+
+    /* ── Header ── */
+    #app-header {
+      background: var(--eip-navy);
+      color: var(--white);
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      padding: 0 1.5rem;
+      height: 56px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    .header-titles { display: flex; flex-direction: column; gap: 2px; }
+    .header-titles .agency {
+      font-size: 0.62rem;
+      font-weight: 400;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.72;
+    }
+    .header-titles h1 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .header-accent {
+      width: 4px;
+      height: 26px;
+      background: var(--eip-orange);
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    /* ── Content ── */
+    #content {
+      min-height: calc(100vh - 56px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 3rem 1.5rem;
+    }
+
+    .intro {
+      text-align: center;
+      max-width: 640px;
+      margin-bottom: 3rem;
+    }
+
+    .intro h2 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--eip-navy);
+      margin-bottom: 0.6rem;
+    }
+
+    .intro p {
+      font-size: 0.95rem;
+      color: #5a6577;
+      font-weight: 400;
+      line-height: 1.5;
+    }
+
+    /* ── Cards ── */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.25rem;
+      width: 100%;
+      max-width: 920px;
+    }
+
+    .card {
+      background: var(--white);
+      border-radius: 12px;
+      padding: 1.5rem;
+      text-decoration: none;
+      color: inherit;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      border-top: 4px solid var(--eip-blue);
+      transition: transform 150ms ease-out, box-shadow 150ms ease-out;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+    }
+
+    .card.placeholder {
+      border-top-color: var(--gray-border);
+      background: #fafbfc;
+      cursor: default;
+    }
+    .card.placeholder:hover {
+      transform: none;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+
+    .card .badge {
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--eip-blue);
+    }
+    .card.placeholder .badge { color: #9aa3ad; }
+
+    .card h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--eip-navy);
+    }
+
+    .card p {
+      font-size: 0.88rem;
+      color: #5a6577;
+      line-height: 1.45;
+      flex: 1;
+    }
+
+    .card .arrow {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--eip-blue);
+      margin-top: 0.25rem;
+    }
+    .card.placeholder .arrow { color: #9aa3ad; }
+
+    /* ── Footer note ── */
+    #footnote {
+      margin-top: 3rem;
+      font-size: 0.78rem;
+      color: #7a8390;
+      text-align: center;
+      max-width: 720px;
+      line-height: 1.5;
+    }
+    #footnote a { color: var(--eip-blue); text-decoration: none; }
+    #footnote a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <header id="app-header">
+    <div class="header-accent"></div>
+    <div class="header-titles">
+      <span class="agency">Tahoe Regional Planning Agency</span>
+      <h1>Lake Tahoe EIP</h1>
+    </div>
+  </header>
+
+  <main id="content">
+    <div class="intro">
+      <h2>Tools &amp; Dashboards</h2>
+      <p>
+        The Lake Tahoe Environmental Improvement Program tracks projects that
+        protect and restore the Tahoe Basin. Use the tools below to explore
+        where EIP projects are happening across the region.
+      </p>
+    </div>
+
+    <div class="cards">
+      <a class="card" href="projects-map.html">
+        <span class="badge">Map</span>
+        <h3>EIP Projects Map</h3>
+        <p>
+          Interactive map of every EIP project with a known location. Search
+          by name or EIP number, filter by program category, and click a
+          point to see project details and link out to LakeTahoeInfo.
+        </p>
+        <span class="arrow">Open map →</span>
+      </a>
+
+      <div class="card placeholder" aria-disabled="true">
+        <span class="badge">Coming soon</span>
+        <h3>Forest Health Tracker</h3>
+        <p>
+          Hazardous fuels treatments, urban defense zones, and CWPP
+          implementation across the Basin's forested lands.
+        </p>
+        <span class="arrow">In development</span>
+      </div>
+
+      <div class="card placeholder" aria-disabled="true">
+        <span class="badge">Coming soon</span>
+        <h3>Watershed Restoration</h3>
+        <p>
+          Stormwater BMPs, meadow restoration, and water-quality projects
+          tracked under EIP Program 01.
+        </p>
+        <span class="arrow">In development</span>
+      </div>
+    </div>
+
+    <p id="footnote">
+      Data source:
+      <a href="https://www.laketahoeinfo.org" target="_blank" rel="noopener">
+        LakeTahoeInfo.org
+      </a>
+      project location web services. Snapshot refreshed nightly via
+      <code>scripts/Build_EIP_ProjectLocations.py</code>.
+    </p>
+  </main>
+
+</body>
+</html>

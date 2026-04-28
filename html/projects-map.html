@@ -1,0 +1,2030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EIP Projects Map — Lake Tahoe EIP</title>
+
+  <!-- Calcite Design System -->
+  <script type="module" src="https://js.arcgis.com/calcite-components/5.0"></script>
+  <link rel="stylesheet" type="text/css" href="https://js.arcgis.com/calcite-components/5.0/calcite.css" />
+
+  <!-- ArcGIS Maps SDK -->
+  <link rel="stylesheet" href="https://js.arcgis.com/4.31/esri/themes/light/main.css" />
+  <script src="https://js.arcgis.com/4.31/"></script>
+
+  <!-- shp-write is loaded ON DEMAND from JS (ensureShpWrite) to avoid an
+       AMD/UMD "multipleDefine" collision with ArcGIS's Dojo loader. -->
+
+  <!-- Lexend Deca (EIP brand font) -->
+  <link href="https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --eip-green:        #6EBE44;
+      --eip-blue:         #007DC3;
+      --eip-orange:       #F16022;
+      --eip-navy:         #0B1F41;
+      --eip-blue-light:   #E0F0FA;
+      --eip-green-light:  #E8F5E0;
+      --eip-orange-light: #FDE8DC;
+      --eip-navy-light:   #E6E8EC;
+      --gray-bg:          #F5F7FA;
+      --gray-border:      #DDDDDD;
+      --white:            #FFFFFF;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    [hidden] { display: none !important; }
+
+    html, body {
+      height: 100%;
+      font-family: 'Lexend Deca', system-ui, sans-serif;
+      color: var(--eip-navy);
+      overflow: hidden;
+      background: var(--gray-bg);
+    }
+
+    #app-wrapper {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    /* ── Header ── */
+    #app-header {
+      background: var(--eip-navy);
+      color: var(--white);
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      padding: 0 1.25rem;
+      height: 56px;
+      flex-shrink: 0;
+      z-index: 100;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    }
+
+    .header-accent {
+      width: 4px; height: 26px;
+      background: var(--eip-orange);
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .back-link {
+      color: rgba(255,255,255,0.78);
+      text-decoration: none;
+      font-size: 0.78rem;
+      font-weight: 500;
+      transition: color 150ms ease-out;
+      white-space: nowrap;
+    }
+    .back-link:hover { color: var(--white); }
+
+    .header-divider {
+      width: 1px; height: 24px;
+      background: rgba(255,255,255,0.22);
+      flex-shrink: 0;
+    }
+
+    .header-titles { display: flex; flex-direction: column; gap: 2px; }
+    .header-titles .agency {
+      font-size: 0.62rem;
+      font-weight: 400;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.72;
+    }
+    .header-titles h1 { font-size: 1.05rem; font-weight: 700; line-height: 1; }
+
+    .header-status {
+      margin-left: auto;
+      font-size: 0.72rem;
+      font-weight: 400;
+      color: rgba(255,255,255,0.72);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .live-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--eip-green);
+      box-shadow: 0 0 6px rgba(110,190,68,0.7);
+    }
+    .live-dot.snapshot { background: #b5a64c; box-shadow: none; }
+    .live-dot.error { background: var(--eip-orange); box-shadow: none; }
+
+    /* ── Main layout ── */
+    #app-body {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 280px 1fr 340px;
+      min-height: 0;
+      transition: grid-template-columns 200ms ease-out;
+    }
+    #app-body.list-collapsed {
+      grid-template-columns: 280px 1fr 0;
+    }
+    #app-body.list-collapsed #list-panel { display: none; }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      background: var(--white);
+      border-right: 1px solid var(--gray-border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .sidebar-section {
+      padding: 1.1rem 1.25rem;
+      border-bottom: 1px solid var(--gray-border);
+    }
+
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      margin-bottom: 0.85rem;
+    }
+    .filter-block {
+      margin-bottom: 0.95rem;
+    }
+    .filter-block:last-child { margin-bottom: 0; }
+    .filter-block-label {
+      font-size: 0.66rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--eip-navy);
+      opacity: 0.65;
+      margin-bottom: 0.4rem;
+    }
+
+    .flag-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+    }
+    .flag-pill {
+      font-size: 0.72rem;
+    }
+    /* tighten Calcite block visuals inside filters-section */
+    .filters-section calcite-block {
+      margin: 0 0 0.95rem 0;
+      --calcite-block-padding: 0;
+    }
+
+    .section-label {
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--eip-navy);
+      opacity: 0.72;
+      margin-bottom: 0.6rem;
+    }
+
+    .filter-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0;
+      cursor: pointer;
+      font-size: 0.84rem;
+      font-weight: 400;
+      color: var(--eip-navy);
+    }
+    .filter-row:hover .filter-name { color: var(--eip-blue); }
+
+    .filter-row input[type="checkbox"] {
+      accent-color: var(--eip-blue);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .filter-name { flex: 1; line-height: 1.25; }
+    .filter-count {
+      font-size: 0.72rem;
+      color: #7a8390;
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+    .filter-color-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    #reset-filters { margin-top: 0.6rem; width: 100%; }
+
+    /* footprints toggle */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-size: 0.84rem;
+    }
+    .toggle-status {
+      font-size: 0.72rem;
+      color: #7a8390;
+      margin-top: 0.4rem;
+    }
+
+    /* Export panel */
+    .export-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    .include-footprints {
+      margin-top: 0.55rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.78rem;
+      color: var(--eip-navy);
+    }
+    .include-footprints[disabled] {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    /* ── Map ── */
+    #map-region {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+    }
+    #map-view { width: 100%; height: 100%; }
+
+    /* Reopen tab — visible only when the right panel is collapsed */
+    .panel-reopen {
+      position: absolute;
+      top: 50%;
+      right: 0;
+      transform: translateY(-50%);
+      background: var(--white);
+      color: var(--eip-navy);
+      border: 1px solid var(--gray-border);
+      border-right: none;
+      border-radius: 8px 0 0 8px;
+      padding: 0.85rem 0.4rem;
+      cursor: pointer;
+      box-shadow: -1px 1px 4px rgba(0,0,0,0.08);
+      font-family: inherit;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      writing-mode: vertical-rl;
+      transform-origin: center;
+      transform: translateY(-50%) rotate(180deg);
+      z-index: 60;
+      transition: background 100ms ease-out, color 100ms ease-out;
+    }
+    .panel-reopen:hover {
+      background: var(--eip-blue-light);
+      color: var(--eip-blue);
+    }
+
+    /* ── List panel ── */
+    #list-panel {
+      background: var(--white);
+      border-left: 1px solid var(--gray-border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .list-header {
+      padding: 0.85rem 1rem 0.6rem;
+      border-bottom: 1px solid var(--gray-border);
+    }
+
+    .search-box {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--gray-border);
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      color: var(--eip-navy);
+      outline: none;
+      transition: border-color 120ms ease-out;
+    }
+    .search-box:focus { border-color: var(--eip-blue); }
+    .search-box::placeholder { color: #9aa3ad; }
+
+    .selection-bar {
+      margin-top: 0.55rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-size: 0.74rem;
+      color: var(--eip-navy);
+    }
+    .selection-bar .sel-count {
+      font-weight: 600;
+      color: var(--eip-orange);
+      font-variant-numeric: tabular-nums;
+    }
+    .selection-bar .sel-actions {
+      display: flex;
+      gap: 0.3rem;
+    }
+    .pill-btn {
+      font-family: inherit;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.25rem 0.55rem;
+      border-radius: 999px;
+      border: 1px solid var(--gray-border);
+      background: var(--white);
+      color: var(--eip-navy);
+      cursor: pointer;
+      transition: all 120ms ease-out;
+    }
+    .pill-btn:hover {
+      border-color: var(--eip-blue);
+      color: var(--eip-blue);
+    }
+    .pill-btn:active { transform: scale(0.96); }
+    .pill-btn[disabled] {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+    .pill-btn.is-on {
+      background: var(--eip-orange);
+      border-color: var(--eip-orange);
+      color: var(--white);
+    }
+    .pill-btn.is-on:hover {
+      background: #d8521b;
+      border-color: #d8521b;
+      color: var(--white);
+    }
+
+    /* List collapse / hide button (sits in panel header) */
+    .panel-collapse-btn {
+      background: none;
+      border: none;
+      color: #7a8390;
+      cursor: pointer;
+      padding: 4px 6px;
+      font-size: 1rem;
+      line-height: 1;
+      border-radius: 4px;
+      transition: background 100ms ease-out, color 100ms ease-out;
+    }
+    .panel-collapse-btn:hover {
+      background: var(--eip-blue-light);
+      color: var(--eip-blue);
+    }
+    .panel-header-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .panel-header-row .panel-title {
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--eip-navy);
+      opacity: 0.72;
+      flex: 1;
+    }
+
+    #list-scroll {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .list-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.55rem;
+      padding: 0.55rem 1rem;
+      cursor: pointer;
+      border-bottom: 1px solid #f1f3f5;
+      border-left: 3px solid transparent;
+      transition: background 100ms ease-out, border-left-color 100ms ease-out;
+    }
+    .list-row:hover {
+      background: var(--eip-blue-light);
+      border-left-color: var(--eip-blue);
+    }
+    .list-row.active {
+      background: var(--eip-orange-light);
+      border-left-color: var(--eip-orange);
+    }
+
+    .row-checkbox {
+      flex-shrink: 0;
+      margin-top: 3px;
+      accent-color: var(--eip-orange);
+      cursor: pointer;
+    }
+    .row-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .row-content .name {
+      font-size: 0.84rem;
+      font-weight: 500;
+      color: var(--eip-navy);
+      line-height: 1.3;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .row-content .meta {
+      font-size: 0.7rem;
+      color: #7a8390;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .cat-pill {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--white);
+      background: #9aa3ad;
+      white-space: nowrap;
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .empty-state {
+      padding: 2rem 1.5rem;
+      text-align: center;
+      font-size: 0.82rem;
+      color: #7a8390;
+    }
+
+    /* ── Popup styling ──────────────────────────────────────────────
+       ArcGIS renders popup content inside its own chrome; we just
+       style our content tree (.eip-popup) and let Esri handle the rest. */
+    .eip-popup {
+      font-family: 'Lexend Deca', system-ui, sans-serif;
+      color: var(--eip-navy);
+      font-size: 0.85rem;
+      line-height: 1.45;
+      max-width: 360px;
+    }
+    .eip-popup .pop-pills {
+      display: flex; flex-wrap: wrap; gap: 0.4rem;
+      margin-bottom: 0.6rem;
+    }
+    .eip-popup .pill-cat {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: #fff;
+      white-space: nowrap;
+    }
+    .eip-popup .pill-stage {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      border: 1px solid;
+      background: #fff;
+    }
+    .eip-popup .pop-meta {
+      font-size: 0.72rem;
+      color: #5a6577;
+      margin-bottom: 0.55rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .eip-popup .pop-meta strong { color: var(--eip-navy); }
+    .eip-popup .pop-desc {
+      font-size: 0.82rem;
+      color: #2c3645;
+      line-height: 1.5;
+      margin-bottom: 0.65rem;
+      max-height: 5.5em;
+      overflow: hidden;
+      position: relative;
+    }
+    .eip-popup .pop-desc.expanded { max-height: none; }
+    .eip-popup .pop-desc-toggle {
+      background: none; border: none;
+      color: var(--eip-blue);
+      font-family: inherit;
+      font-size: 0.74rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0; margin-top: -0.3rem;
+      margin-bottom: 0.55rem;
+    }
+    .eip-popup .pop-desc-toggle:hover { text-decoration: underline; }
+    .eip-popup .pop-facts {
+      display: grid;
+      grid-template-columns: minmax(95px, auto) 1fr;
+      gap: 0.25rem 0.75rem;
+      margin: 0 0 0.7rem 0;
+      padding: 0.5rem 0;
+      border-top: 1px solid #ECEEF1;
+      border-bottom: 1px solid #ECEEF1;
+    }
+    .eip-popup .pop-facts dt {
+      font-size: 0.66rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #7a8390;
+      padding-top: 1px;
+    }
+    .eip-popup .pop-facts dd {
+      font-size: 0.78rem;
+      color: var(--eip-navy);
+      margin: 0;
+      word-wrap: break-word;
+    }
+    .eip-popup .pop-facts dd.cost { font-weight: 600; color: var(--eip-blue); }
+    .eip-popup .pop-actions {
+      display: flex; flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    .eip-popup .pop-btn {
+      display: inline-block;
+      padding: 0.4rem 0.7rem;
+      border-radius: 6px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 120ms ease-out;
+    }
+    .eip-popup .pop-btn-primary {
+      background: var(--eip-blue);
+      color: #fff;
+    }
+    .eip-popup .pop-btn-primary:hover { background: #006bb0; }
+    .eip-popup .pop-btn-outline {
+      background: #fff;
+      color: var(--eip-blue);
+      border: 1px solid var(--eip-blue);
+    }
+    .eip-popup .pop-btn-outline:hover {
+      background: var(--eip-blue-light);
+    }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--eip-navy);
+      color: var(--white);
+      padding: 0.6rem 1.1rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 200ms ease-out;
+    }
+    #toast.show { opacity: 1; }
+    #toast.error { background: var(--eip-orange); }
+  </style>
+</head>
+<body>
+
+<div id="app-wrapper">
+
+  <!-- ── HEADER ── -->
+  <header id="app-header">
+    <div class="header-accent"></div>
+    <a href="index.html" class="back-link">← Tools</a>
+    <div class="header-divider"></div>
+    <div class="header-titles">
+      <span class="agency">Lake Tahoe EIP</span>
+      <h1>EIP Projects Map</h1>
+    </div>
+    <div class="header-status">
+      <span id="status-dot" class="live-dot snapshot"></span>
+      <span id="status-text">Loading…</span>
+    </div>
+  </header>
+
+  <div id="app-body">
+
+    <!-- ── SIDEBAR ── -->
+    <aside id="sidebar">
+      <div class="sidebar-section filters-section">
+        <div class="filter-bar">
+          <span class="section-label" style="margin:0;">Filters</span>
+          <calcite-button
+            id="reset-filters"
+            appearance="outline"
+            kind="neutral"
+            scale="s"
+            icon-start="reset"
+          >
+            Reset
+          </calcite-button>
+        </div>
+
+        <div class="filter-block">
+          <div class="filter-block-label">EIP Focus Area</div>
+          <div id="category-filters"></div>
+        </div>
+
+        <div class="filter-block">
+          <div class="filter-block-label">Stage</div>
+          <div id="stage-filters"></div>
+        </div>
+
+        <div class="filter-block">
+          <div class="filter-block-label">Program</div>
+          <calcite-combobox
+            id="program-filter"
+            placeholder="All programs"
+            selection-mode="multiple"
+            scale="s"
+            overlay-positioning="fixed"
+          ></calcite-combobox>
+        </div>
+
+        <div class="filter-block">
+          <div class="filter-block-label">Jurisdiction</div>
+          <calcite-combobox
+            id="jurisdiction-filter"
+            placeholder="All jurisdictions"
+            selection-mode="multiple"
+            scale="s"
+            overlay-positioning="fixed"
+          ></calcite-combobox>
+        </div>
+
+        <calcite-block heading="Watershed" collapsible scale="s" id="watershed-block">
+          <calcite-combobox
+            id="watershed-filter"
+            placeholder="All watersheds"
+            selection-mode="multiple"
+            scale="s"
+            overlay-positioning="fixed"
+          ></calcite-combobox>
+        </calcite-block>
+
+        <div class="filter-block">
+          <div class="filter-block-label">Project type</div>
+          <div class="flag-pills">
+            <button class="pill-btn flag-pill" data-flag="IsEIPProject">EIP</button>
+            <button class="pill-btn flag-pill" data-flag="IsTransportationProject">Transportation</button>
+            <button class="pill-btn flag-pill" data-flag="IsLakeClarityProject">Lake Clarity</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="section-label">Project Footprints</div>
+        <div class="toggle-row">
+          <span>Show polygons &amp; lines</span>
+          <calcite-switch id="footprints-toggle" scale="s"></calcite-switch>
+        </div>
+        <div class="toggle-status" id="footprints-status">
+          Off — points only (~250 KB)
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="section-label">Export</div>
+        <div class="export-buttons">
+          <calcite-button id="export-geojson" icon-start="download" scale="s" kind="brand">
+            GeoJSON
+          </calcite-button>
+          <calcite-button id="export-shapefile" icon-start="download" scale="s" appearance="outline">
+            Shapefile (.zip)
+          </calcite-button>
+          <calcite-button id="export-csv" icon-start="download" scale="s" appearance="outline">
+            CSV (lat/lon)
+          </calcite-button>
+        </div>
+        <label class="include-footprints" id="include-footprints-row">
+          <input type="checkbox" id="include-footprints" />
+          Include polygons &amp; lines
+        </label>
+        <div class="toggle-status" id="export-target-text">
+          Will export 0 features
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="section-label">About</div>
+        <p style="font-size:0.78rem;line-height:1.5;color:#5a6577;">
+          Showing all EIP projects with a known location. Categories are
+          derived from the EIP # prefix and match LakeTahoeInfo's four
+          official Focus Areas. Click any point or row to view the project
+          on LakeTahoeInfo.
+        </p>
+      </div>
+    </aside>
+
+    <!-- ── MAP ── -->
+    <div id="map-region">
+      <div id="map-view"></div>
+      <!-- Reopen tab — visible only when the list panel is hidden -->
+      <button id="panel-reopen" class="panel-reopen" hidden>PROJECTS</button>
+    </div>
+
+    <!-- ── LIST PANEL ── -->
+    <aside id="list-panel">
+      <div class="list-header">
+        <div class="panel-header-row">
+          <span class="panel-title">Projects</span>
+          <button id="panel-collapse" class="panel-collapse-btn" title="Hide panel" aria-label="Hide panel">▶</button>
+        </div>
+        <input
+          id="search-box"
+          class="search-box"
+          type="text"
+          placeholder="Search by project name or EIP #"
+          autocomplete="off"
+        />
+        <div class="selection-bar">
+          <span><span class="sel-count" id="sel-count-text">0</span> selected</span>
+          <div class="sel-actions">
+            <button class="pill-btn" id="sel-all-visible">Select visible</button>
+            <button class="pill-btn" id="sel-show-only" disabled>Show selected</button>
+            <button class="pill-btn" id="sel-clear" disabled>Clear</button>
+          </div>
+        </div>
+        <div class="selection-bar" style="margin-top:0.3rem;">
+          <span id="list-meta-text">—</span>
+        </div>
+      </div>
+      <div id="list-scroll">
+        <div class="empty-state" id="list-empty" hidden>
+          No projects match the current filters.
+        </div>
+      </div>
+    </aside>
+
+    <!-- Reopen tab — visible only when the list panel is hidden -->
+    <button id="panel-reopen" class="panel-reopen" hidden>PROJECTS ◀</button>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // ─────────────────────────────────────────────────────────────────────
+  // EIP Focus Areas (mirrors EIP_FOCUS_AREAS in the python script)
+  // ─────────────────────────────────────────────────────────────────────
+  const EIP_FOCUS_AREAS = {
+    "01": "01 - Watersheds and Water Quality",
+    "02": "02 - Forest Health",
+    "03": "03 - Sustainable Recreation and Transportation",
+    "04": "04 - Science, Stewardship, and Accountability",
+  };
+  function focusAreaFromEIP(eip) {
+    if (!eip) return "";
+    const prefix = String(eip).trim().slice(0, 2);
+    return EIP_FOCUS_AREAS[prefix] || "";
+  }
+
+  // EIP brand colors keyed by Focus Area
+  const CATEGORY_COLOR = {
+    "01 - Watersheds and Water Quality":              [0, 125, 195, 1],   // EIP Blue
+    "02 - Forest Health":                             [110, 190, 68, 1],  // EIP Green
+    "03 - Sustainable Recreation and Transportation": [241, 96, 34, 1],   // EIP Orange
+    "04 - Science, Stewardship, and Accountability":  [11, 31, 65, 1],    // EIP Navy
+    "Uncategorized":                                  [154, 163, 173, 0.85],
+  };
+
+  const FOCUS_AREA_ORDER = [
+    "01 - Watersheds and Water Quality",
+    "02 - Forest Health",
+    "03 - Sustainable Recreation and Transportation",
+    "04 - Science, Stewardship, and Accountability",
+    "Uncategorized",
+  ];
+
+  // Sentinel for missing/empty dimension values (Stage, Program, etc.)
+  const NONE = "(none)";
+  function dimVal(v) { return (v == null || v === "") ? NONE : String(v); }
+
+  const LOCAL_GEOJSON = "../data/projects.geojson";
+  const LOCAL_DETAILED = "../data/detailed.geojson";
+  const LIVE_REST_URL =
+    "https://www.laketahoeinfo.org/WebServices/" +
+    "GetProjectSimpleLocationAndGeospatialAssociations/JSON/" +
+    "e17aeb86-85e3-4260-83fd-a2b32501c476";
+  const TRPA_BOUNDARY_URL =
+    "https://maps.trpa.org/server/rest/services/Boundaries/FeatureServer/4";
+
+  // Print service URL — default Esri public PrintingTools as a placeholder.
+  // Swap in your TRPA custom print service once it's published, e.g.
+  //   https://maps.trpa.org/server/rest/services/<YourPrintService>/GPServer/Export%20Web%20Map%20Task
+  const PRINT_SERVICE_URL =
+    "https://utility.arcgisonline.com/arcgis/rest/services/" +
+    "Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // App state
+  // ─────────────────────────────────────────────────────────────────────
+  const state = {
+    allFeatures: [],                 // raw point features from projects.geojson
+    detailedFeatures: [],            // polygons/lines/points from detailed.geojson (lazy)
+    detailedLoaded: false,
+    activeCategories: new Set(),
+    activeStages: new Set(),
+    activePrograms: new Set(),       // empty = no constraint
+    activeJurisdictions: new Set(),  // empty = no constraint
+    activeWatersheds: new Set(),     // empty = no constraint
+    flagEIP: false,                  // true → require IsEIPProject = true
+    flagTransportation: false,
+    flagLakeClarity: false,
+    searchTerm: "",
+    selection: new Set(),            // Set<EIPProjectNumber>
+    showSelectedOnly: false,         // true when the "Show selected" pill is active
+    view: null,
+    pointsLayer: null,
+    pointsLayerView: null,
+    detailedLayer: null,
+    detailedLayerView: null,
+    boundaryLayer: null,
+  };
+
+  function setStatus(kind, text) {
+    const dot = document.getElementById("status-dot");
+    const txt = document.getElementById("status-text");
+    dot.classList.remove("snapshot", "error");
+    if (kind === "snapshot") dot.classList.add("snapshot");
+    if (kind === "error")    dot.classList.add("error");
+    txt.textContent = text;
+  }
+
+  function toast(message, kind = "info") {
+    const el = document.getElementById("toast");
+    el.textContent = message;
+    el.classList.toggle("error", kind === "error");
+    el.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => el.classList.remove("show"), 2400);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Data loading
+  // ─────────────────────────────────────────────────────────────────────
+  async function loadLocalSnapshot() {
+    const resp = await fetch(LOCAL_GEOJSON);
+    if (!resp.ok) throw new Error(`local fetch failed: ${resp.status}`);
+    return resp.json();
+  }
+
+  async function loadLiveRefresh() {
+    const resp = await fetch(LIVE_REST_URL);
+    if (!resp.ok) throw new Error(`live fetch failed: ${resp.status}`);
+    const raw = await resp.json();
+    const records = Array.isArray(raw) ? raw : (raw.Results || raw.results || []);
+    const features = [];
+    for (const r of records) {
+      if (r.NoLocation) continue;
+      const lat = parseFloat(r.Latitude);
+      const lon = parseFloat(r.Longitude);
+      if (!isFinite(lat) || !isFinite(lon)) continue;
+      const pn = String(r.EIPProjectNumber || "").trim();
+      const pid = r.ProjectID != null ? String(r.ProjectID) : "";
+      features.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [lon, lat] },
+        properties: {
+          ProjectID: pid,
+          EIPProjectNumber: pn,
+          ProjectName: r.ProjectName || "",
+          Category: focusAreaFromEIP(pn),
+          Region: "", State: "", Jurisdiction: "", Watershed: "",
+          ProjectURL: pid
+            ? `https://www.laketahoeinfo.org/Project/Detail/${pid}`
+            : "",
+        },
+      });
+    }
+    return { type: "FeatureCollection", features };
+  }
+
+  async function loadDetailed() {
+    const resp = await fetch(LOCAL_DETAILED);
+    if (!resp.ok) throw new Error(`detailed fetch failed: ${resp.status}`);
+    return resp.json();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Renderers / popup templates
+  // ─────────────────────────────────────────────────────────────────────
+  function pointSymbol(rgba, size = 8) {
+    return {
+      type: "simple-marker",
+      style: "circle",
+      color: rgba,
+      size: size,
+      outline: { color: [255, 255, 255, 0.9], width: 1 },
+    };
+  }
+
+  function buildPointsRenderer() {
+    return {
+      type: "unique-value",
+      field: "Category",
+      defaultSymbol: pointSymbol(CATEGORY_COLOR["Uncategorized"], 7),
+      defaultLabel: "Uncategorized",
+      uniqueValueInfos: FOCUS_AREA_ORDER
+        .filter(c => c !== "Uncategorized")
+        .map(c => ({
+          value: c,
+          label: c,
+          symbol: pointSymbol(CATEGORY_COLOR[c], 9),
+        })),
+    };
+  }
+
+  function buildDetailedRenderer() {
+    return {
+      type: "unique-value",
+      field: "Category",
+      defaultSymbol: { type: "simple-fill",
+        color: [154, 163, 173, 0.25],
+        outline: { color: [154, 163, 173, 0.9], width: 1 } },
+      defaultLabel: "Uncategorized",
+      uniqueValueInfos: FOCUS_AREA_ORDER
+        .filter(c => c !== "Uncategorized")
+        .map(c => {
+          const [r, g, b] = CATEGORY_COLOR[c];
+          return {
+            value: c,
+            label: c,
+            symbol: {
+              type: "simple-fill",
+              color: [r, g, b, 0.18],
+              outline: { color: [r, g, b, 0.95], width: 1.4 },
+            },
+          };
+        }),
+    };
+  }
+
+  // Stage colors: muted tints, not the focus-area palette (avoid clash)
+  const STAGE_COLOR = {
+    "Completed":           "#4A9F35",
+    "Implementation":      "#0072CE",
+    "Planning/Design":     "#7B6A8A",
+    "Post-Implementation": "#7A8390",
+  };
+
+  function formatCurrency(n) {
+    if (n == null || isNaN(n) || n === 0) return null;
+    if (n >= 1_000_000)
+      return "$" + (n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)
+        .replace(/\.0$/, "") + "M";
+    if (n >= 1_000)
+      return "$" + Math.round(n / 1_000).toLocaleString() + "K";
+    return "$" + Math.round(n).toLocaleString();
+  }
+
+  function formatTimeline(plan, impl, end) {
+    const start = impl || plan;
+    if (!start && !end) return null;
+    if (start && end && start === end) return String(start);
+    if (start && end) return `${start} → ${end}`;
+    if (start) return `${start} → ongoing`;
+    return `? → ${end}`;
+  }
+
+  function escapeHtmlPopup(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function renderPopup(attrs) {
+    const cat = attrs.Category || "Uncategorized";
+    const dot = CATEGORY_COLOR[cat] || [154, 163, 173, 0.85];
+    const catRgba = `rgba(${dot[0]},${dot[1]},${dot[2]},${dot[3] ?? 1})`;
+
+    const stage = attrs.Stage;
+    const stageColor = stage ? (STAGE_COLOR[stage] || "#7a8390") : null;
+
+    const pills = [];
+    pills.push(`<span class="pill-cat" style="background:${catRgba};">${escapeHtmlPopup(cat)}</span>`);
+    if (stage) {
+      pills.push(`<span class="pill-stage" style="border-color:${stageColor};color:${stageColor};">${escapeHtmlPopup(stage)}</span>`);
+    }
+
+    const metaBits = [];
+    metaBits.push(`<strong>EIP ${escapeHtmlPopup(attrs.EIPProjectNumber)}</strong>`);
+    if (attrs.EIPProgram) metaBits.push(escapeHtmlPopup(attrs.EIPProgram));
+    const metaHtml = metaBits.join(" &middot; ");
+
+    // Description with show-more toggle
+    let descHtml = "";
+    if (attrs.ProjectDescription) {
+      const id = "desc-" + Math.random().toString(36).slice(2, 8);
+      const text = escapeHtmlPopup(attrs.ProjectDescription);
+      descHtml = `
+        <p class="pop-desc" id="${id}">${text}</p>
+        <button class="pop-desc-toggle" data-target="${id}">Show more ↓</button>
+      `;
+    }
+
+    // Fact grid — only include facts we have data for
+    const facts = [];
+    if (attrs.LeadImplementer)
+      facts.push(["Lead", escapeHtmlPopup(attrs.LeadImplementer)]);
+    if (attrs.ProjectWatershed && attrs.ProjectWatershed !== "n/a")
+      facts.push(["Watershed", escapeHtmlPopup(attrs.ProjectWatershed)]);
+    if (attrs.ProjectJurisdiction)
+      facts.push(["Jurisdiction", escapeHtmlPopup(attrs.ProjectJurisdiction)]);
+    const tl = formatTimeline(
+      attrs.PlanningStartDate, attrs.ImplementationStartDate, attrs.EndDate);
+    if (tl) facts.push(["Timeline", escapeHtmlPopup(tl)]);
+    const cost = formatCurrency(attrs.EstimatedTotalCost);
+    if (cost) facts.push(["Est. cost", `<span class="cost">${cost}</span>`]);
+    if (attrs.ProjectThresholdCategories)
+      facts.push(["Threshold", escapeHtmlPopup(attrs.ProjectThresholdCategories)]);
+    if (attrs.EIPActionPriority)
+      facts.push(["Action priority", escapeHtmlPopup(attrs.EIPActionPriority)]);
+
+    const factsHtml = facts.length
+      ? `<dl class="pop-facts">${facts.map(([k, v]) =>
+          `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`
+      : "";
+
+    // Actions
+    const actions = [];
+    if (attrs.ProjectURL)
+      actions.push(`<a class="pop-btn pop-btn-primary" href="${escapeHtmlPopup(attrs.ProjectURL)}" target="_blank" rel="noopener">Project page →</a>`);
+    if (attrs.ProjectFactSheetUrl)
+      actions.push(`<a class="pop-btn pop-btn-outline" href="${escapeHtmlPopup(attrs.ProjectFactSheetUrl)}" target="_blank" rel="noopener">Fact sheet ↗</a>`);
+    const actionsHtml = actions.length
+      ? `<div class="pop-actions">${actions.join("")}</div>`
+      : "";
+
+    return `
+      <div class="eip-popup">
+        <div class="pop-pills">${pills.join("")}</div>
+        <div class="pop-meta">${metaHtml}</div>
+        ${descHtml}
+        ${factsHtml}
+        ${actionsHtml}
+      </div>
+    `;
+  }
+
+  function buildPopupTemplate() {
+    return {
+      title: "{ProjectName}",
+      outFields: ["*"],
+      content: (feature) => {
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = renderPopup(feature.graphic.attributes);
+        // Wire the show-more / show-less button
+        const toggle = wrapper.querySelector(".pop-desc-toggle");
+        if (toggle) {
+          toggle.addEventListener("click", () => {
+            const targetId = toggle.dataset.target;
+            const desc = wrapper.querySelector("#" + targetId);
+            if (!desc) return;
+            const expanded = desc.classList.toggle("expanded");
+            toggle.textContent = expanded ? "Show less ↑" : "Show more ↓";
+          });
+        }
+        return wrapper;
+      },
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Filter sidebar wiring
+  // ─────────────────────────────────────────────────────────────────────
+  function categoryOf(f) { return f.properties.Category || "Uncategorized"; }
+
+  function buildCategoryFilters() {
+    const counts = new Map();
+    for (const f of state.allFeatures) {
+      const c = categoryOf(f);
+      counts.set(c, (counts.get(c) || 0) + 1);
+    }
+    const cats = FOCUS_AREA_ORDER.filter(c => counts.has(c));
+    state.activeCategories = new Set(cats);
+
+    const container = document.getElementById("category-filters");
+    container.innerHTML = "";
+    for (const c of cats) {
+      const row = document.createElement("label");
+      row.className = "filter-row";
+      const dot = CATEGORY_COLOR[c] || [154, 163, 173, 0.85];
+      const rgba = `rgba(${dot[0]},${dot[1]},${dot[2]},${dot[3] ?? 1})`;
+      row.innerHTML = `
+        <input type="checkbox" checked data-cat="${c.replace(/"/g, "&quot;")}" />
+        <span class="filter-color-dot" style="background:${rgba};"></span>
+        <span class="filter-name">${c}</span>
+        <span class="filter-count">${counts.get(c).toLocaleString()}</span>
+      `;
+      container.appendChild(row);
+      row.querySelector("input").addEventListener("change", e => {
+        const cat = e.target.getAttribute("data-cat");
+        if (e.target.checked) state.activeCategories.add(cat);
+        else state.activeCategories.delete(cat);
+        applyFilters();
+      });
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Stage filter (checkbox list, identical pattern to Focus Area)
+  // ─────────────────────────────────────────────────────────────────────
+  const STAGE_ORDER = [
+    "Planning/Design", "Implementation", "Post-Implementation", "Completed", NONE
+  ];
+
+  function buildStageFilters() {
+    const counts = new Map();
+    for (const f of state.allFeatures) {
+      const s = dimVal(f.properties.Stage);
+      counts.set(s, (counts.get(s) || 0) + 1);
+    }
+    const stages = STAGE_ORDER.filter(s => counts.has(s));
+    state.activeStages = new Set(stages);
+
+    const container = document.getElementById("stage-filters");
+    container.innerHTML = "";
+    for (const s of stages) {
+      const row = document.createElement("label");
+      row.className = "filter-row";
+      const display = s === NONE ? "Unspecified" : s;
+      const dotColor = STAGE_COLOR[s] || "#9aa3ad";
+      row.innerHTML = `
+        <input type="checkbox" checked data-stage="${escapeAttr(s)}" />
+        <span class="filter-color-dot" style="background:${dotColor};"></span>
+        <span class="filter-name">${escapeHtml(display)}</span>
+        <span class="filter-count">${counts.get(s).toLocaleString()}</span>
+      `;
+      container.appendChild(row);
+      row.querySelector("input").addEventListener("change", e => {
+        const val = e.target.getAttribute("data-stage");
+        if (e.target.checked) state.activeStages.add(val);
+        else state.activeStages.delete(val);
+        applyFilters();
+      });
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Combobox-backed filters (Program, Jurisdiction, Watershed)
+  // ─────────────────────────────────────────────────────────────────────
+  function uniqueValues(propName) {
+    const counts = new Map();
+    for (const f of state.allFeatures) {
+      const v = dimVal(f.properties[propName]);
+      counts.set(v, (counts.get(v) || 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => {
+        // NONE last, then alpha
+        if (a[0] === NONE) return 1;
+        if (b[0] === NONE) return -1;
+        return a[0].localeCompare(b[0]);
+      });
+  }
+
+  function setupCombobox(comboboxId, propName, activeSet) {
+    const cb = document.getElementById(comboboxId);
+    cb.innerHTML = "";
+    for (const [val, count] of uniqueValues(propName)) {
+      const item = document.createElement("calcite-combobox-item");
+      item.setAttribute("value", val);
+      item.setAttribute("text-label",
+        (val === NONE ? "(unspecified)" : val) + ` · ${count.toLocaleString()}`);
+      cb.appendChild(item);
+    }
+    cb.addEventListener("calciteComboboxChange", () => {
+      activeSet.clear();
+      const items = cb.selectedItems || [];
+      for (const item of items) activeSet.add(item.getAttribute("value"));
+      applyFilters();
+    });
+  }
+
+  function buildAttributeComboboxes() {
+    setupCombobox("program-filter",      "EIPProgram",          state.activePrograms);
+    setupCombobox("jurisdiction-filter", "ProjectJurisdiction", state.activeJurisdictions);
+    setupCombobox("watershed-filter",    "ProjectWatershed",    state.activeWatersheds);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Project type flag pills (EIP / Transportation / Lake Clarity)
+  // ─────────────────────────────────────────────────────────────────────
+  const FLAG_STATE_KEY = {
+    "IsEIPProject": "flagEIP",
+    "IsTransportationProject": "flagTransportation",
+    "IsLakeClarityProject": "flagLakeClarity",
+  };
+
+  function setupFlagPills() {
+    document.querySelectorAll(".flag-pill").forEach(btn => {
+      const flag = btn.getAttribute("data-flag");
+      const key = FLAG_STATE_KEY[flag];
+      btn.addEventListener("click", () => {
+        state[key] = !state[key];
+        btn.classList.toggle("is-on", state[key]);
+        applyFilters();
+      });
+    });
+  }
+
+  function setupResetButton() {
+    document.getElementById("reset-filters").addEventListener("click", () => {
+      // Search
+      document.getElementById("search-box").value = "";
+      state.searchTerm = "";
+
+      // Focus Area — check everything back on
+      document.querySelectorAll('#category-filters input').forEach(el => el.checked = true);
+      state.activeCategories = new Set(
+        Array.from(document.querySelectorAll('#category-filters input'))
+          .map(el => el.getAttribute("data-cat"))
+      );
+
+      // Stage — check everything back on
+      document.querySelectorAll('#stage-filters input').forEach(el => el.checked = true);
+      state.activeStages = new Set(
+        Array.from(document.querySelectorAll('#stage-filters input'))
+          .map(el => el.getAttribute("data-stage"))
+      );
+
+      // Comboboxes — clear all selections
+      for (const id of ["program-filter", "jurisdiction-filter", "watershed-filter"]) {
+        const cb = document.getElementById(id);
+        if (cb && cb.selectedItems) {
+          for (const item of Array.from(cb.selectedItems)) item.selected = false;
+        }
+      }
+      state.activePrograms.clear();
+      state.activeJurisdictions.clear();
+      state.activeWatersheds.clear();
+
+      // Flag pills — clear all
+      state.flagEIP = false;
+      state.flagTransportation = false;
+      state.flagLakeClarity = false;
+      document.querySelectorAll(".flag-pill").forEach(b => b.classList.remove("is-on"));
+
+      applyFilters();
+    });
+  }
+
+  function setupSearch() {
+    document.getElementById("search-box").addEventListener("input", e => {
+      state.searchTerm = e.target.value.trim().toLowerCase();
+      applyFilters();
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Filtering
+  // ─────────────────────────────────────────────────────────────────────
+  function passesFilters(f) {
+    const p = f.properties;
+    // Focus Area (checkbox semantics — must be in active set)
+    if (!state.activeCategories.has(categoryOf(f))) return false;
+    // Stage (checkbox semantics)
+    if (!state.activeStages.has(dimVal(p.Stage))) return false;
+    // Program / Jurisdiction / Watershed (combobox semantics — empty = no filter)
+    if (state.activePrograms.size && !state.activePrograms.has(dimVal(p.EIPProgram))) return false;
+    if (state.activeJurisdictions.size && !state.activeJurisdictions.has(dimVal(p.ProjectJurisdiction))) return false;
+    if (state.activeWatersheds.size && !state.activeWatersheds.has(dimVal(p.ProjectWatershed))) return false;
+    // Flags (only filter when on)
+    if (state.flagEIP            && !p.IsEIPProject)            return false;
+    if (state.flagTransportation && !p.IsTransportationProject) return false;
+    if (state.flagLakeClarity    && !p.IsLakeClarityProject)    return false;
+    // Search
+    if (state.searchTerm) {
+      const hay = (p.ProjectName + " " + p.EIPProjectNumber).toLowerCase();
+      if (!hay.includes(state.searchTerm)) return false;
+    }
+    return true;
+  }
+
+  function escSql(s) { return String(s).replace(/'/g, "''"); }
+
+  function buildSetClause(field, set) {
+    // For checkbox-style "must be in set" filters with NONE sentinel handling
+    const vals = Array.from(set);
+    if (!vals.length) return "1=0";
+    const parts = vals.map(v => v === NONE
+      ? `(${field} IS NULL OR ${field} = '')`
+      : `${field} = '${escSql(v)}'`);
+    return "(" + parts.join(" OR ") + ")";
+  }
+
+  function arcgisWhereClause() {
+    // "Show selected" mode: ignore filters, restrict to the selection set
+    if (state.showSelectedOnly) {
+      const ids = Array.from(state.selection);
+      if (!ids.length) return "1=0";
+      const list = ids.map(id => `'${escSql(id)}'`).join(",");
+      return `EIPProjectNumber IN (${list})`;
+    }
+
+    const clauses = [];
+
+    // Focus Area + Stage (must be in active set)
+    clauses.push(buildSetClause("Category", state.activeCategories));
+    clauses.push(buildSetClause("Stage",    state.activeStages));
+
+    // Program / Jurisdiction / Watershed (combobox: only filter when non-empty)
+    if (state.activePrograms.size)
+      clauses.push(buildSetClause("EIPProgram", state.activePrograms));
+    if (state.activeJurisdictions.size)
+      clauses.push(buildSetClause("ProjectJurisdiction", state.activeJurisdictions));
+    if (state.activeWatersheds.size)
+      clauses.push(buildSetClause("ProjectWatershed", state.activeWatersheds));
+
+    // Flags — GeoJSONLayer infers booleans as small-int 1/0 for SQL
+    if (state.flagEIP)            clauses.push("IsEIPProject = 1");
+    if (state.flagTransportation) clauses.push("IsTransportationProject = 1");
+    if (state.flagLakeClarity)    clauses.push("IsLakeClarityProject = 1");
+
+    // Search
+    if (state.searchTerm) {
+      const q = escSql(state.searchTerm);
+      clauses.push(`(LOWER(ProjectName) LIKE '%${q}%' OR LOWER(EIPProjectNumber) LIKE '%${q}%')`);
+    }
+
+    return clauses.join(" AND ");
+  }
+
+  function applyFilters() {
+    const where = arcgisWhereClause();
+    if (state.pointsLayerView) state.pointsLayerView.filter = { where };
+    if (state.detailedLayerView) state.detailedLayerView.filter = { where };
+    renderList();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Selection
+  // ─────────────────────────────────────────────────────────────────────
+  function toggleSelection(eipNumber, on) {
+    if (on === undefined) on = !state.selection.has(eipNumber);
+    if (on) state.selection.add(eipNumber);
+    else    state.selection.delete(eipNumber);
+    refreshSelectionUI();
+  }
+
+  function clearSelection() {
+    state.selection.clear();
+    refreshSelectionUI();
+    renderList();
+  }
+
+  function selectVisible() {
+    const filtered = state.allFeatures.filter(passesFilters);
+    const visible = filtered.filter(inExtent);
+    for (const f of visible) state.selection.add(f.properties.EIPProjectNumber);
+    refreshSelectionUI();
+    renderList();
+  }
+
+  function refreshSelectionUI() {
+    const n = state.selection.size;
+    document.getElementById("sel-count-text").textContent = n.toLocaleString();
+    document.getElementById("sel-clear").disabled = n === 0;
+    document.getElementById("sel-show-only").disabled = n === 0;
+
+    // If we were showing-selected and selection is now empty, exit that mode
+    if (n === 0 && state.showSelectedOnly) {
+      state.showSelectedOnly = false;
+      document.getElementById("sel-show-only").classList.remove("is-on");
+      document.getElementById("sel-show-only").textContent = "Show selected";
+      applyFilters();
+    }
+
+    refreshExportTargetText();
+    // Update checkbox state for any currently rendered rows
+    for (const cb of document.querySelectorAll(".row-checkbox")) {
+      const eip = cb.dataset.eip;
+      cb.checked = state.selection.has(eip);
+    }
+    // Also restyle active rows
+    for (const row of document.querySelectorAll(".list-row")) {
+      const eip = row.dataset.eip;
+      row.classList.toggle("active", state.selection.has(eip));
+    }
+  }
+
+  function refreshExportTargetText() {
+    const target = exportTargetFeatures();
+    const incFootprint = document.getElementById("include-footprints").checked;
+    let extra = "";
+    if (incFootprint && state.detailedLoaded) {
+      const ids = new Set(target.map(f => f.properties.EIPProjectNumber));
+      const matching = state.detailedFeatures.filter(f =>
+        ids.has(f.properties.EIPProjectNumber));
+      extra = ` + ${matching.length.toLocaleString()} footprint`;
+      if (matching.length !== 1) extra += "s";
+    }
+    const verb = state.selection.size > 0 ? "selected" : "filtered";
+    document.getElementById("export-target-text").textContent =
+      `Will export ${target.length.toLocaleString()} ${verb} point` +
+      (target.length === 1 ? "" : "s") + extra;
+  }
+
+  function exportTargetFeatures() {
+    if (state.selection.size > 0) {
+      return state.allFeatures.filter(f =>
+        state.selection.has(f.properties.EIPProjectNumber));
+    }
+    return state.allFeatures.filter(passesFilters);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // List rendering (with checkboxes)
+  // ─────────────────────────────────────────────────────────────────────
+  let currentExtent = null;
+
+  function inExtent(f) {
+    if (!currentExtent) return true;
+    const [x, y] = f.geometry.coordinates;
+    return (
+      x >= currentExtent.xmin && x <= currentExtent.xmax &&
+      y >= currentExtent.ymin && y <= currentExtent.ymax
+    );
+  }
+
+  function renderList() {
+    const scroll = document.getElementById("list-scroll");
+    const empty = document.getElementById("list-empty");
+
+    let filtered, inView;
+    if (state.showSelectedOnly) {
+      // In selection-preview mode: list & map both show only selection
+      filtered = state.allFeatures.filter(f =>
+        state.selection.has(f.properties.EIPProjectNumber));
+      inView = filtered;       // ignore extent so all selected are visible
+    } else {
+      filtered = state.allFeatures.filter(passesFilters);
+      inView = filtered.filter(inExtent);
+    }
+
+    document.getElementById("list-meta-text").textContent = state.showSelectedOnly
+      ? `${filtered.length.toLocaleString()} selected`
+      : `${inView.length.toLocaleString()} of ${filtered.length.toLocaleString()} in view`;
+    refreshExportTargetText();
+
+    Array.from(scroll.children).forEach(child => {
+      if (child.id !== "list-empty") child.remove();
+    });
+
+    if (filtered.length === 0) {
+      empty.hidden = false;
+      empty.textContent = "No projects match the current filters.";
+      return;
+    }
+    if (inView.length === 0) {
+      empty.hidden = false;
+      empty.textContent = "No matching projects in the current map view. Pan or zoom out.";
+      return;
+    }
+    empty.hidden = true;
+
+    const frag = document.createDocumentFragment();
+    for (const f of inView.slice(0, 500)) {
+      const row = document.createElement("div");
+      row.className = "list-row";
+      const eip = f.properties.EIPProjectNumber;
+      row.dataset.eip = eip;
+      if (state.selection.has(eip)) row.classList.add("active");
+
+      const cat = categoryOf(f);
+      const dot = CATEGORY_COLOR[cat] || [154, 163, 173, 0.85];
+      const rgba = `rgba(${dot[0]},${dot[1]},${dot[2]},${dot[3] ?? 1})`;
+      const checked = state.selection.has(eip) ? "checked" : "";
+
+      row.innerHTML = `
+        <input type="checkbox" class="row-checkbox" data-eip="${escapeAttr(eip)}" ${checked} />
+        <div class="row-content">
+          <div class="name">${escapeHtml(f.properties.ProjectName)}</div>
+          <div class="meta">
+            <span class="cat-pill" style="background:${rgba};">${escapeHtml(cat)}</span>
+            <span>EIP ${escapeHtml(eip)}</span>
+          </div>
+        </div>
+      `;
+
+      const cb = row.querySelector(".row-checkbox");
+      cb.addEventListener("click", e => e.stopPropagation());
+      cb.addEventListener("change", e => {
+        toggleSelection(eip, e.target.checked);
+      });
+      row.addEventListener("click", () => zoomToFeature(f));
+      frag.appendChild(row);
+    }
+    scroll.appendChild(frag);
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+  function escapeAttr(s) { return escapeHtml(s); }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Map: build, attach data, wire interactions
+  // ─────────────────────────────────────────────────────────────────────
+  function fcToBlobUrl(fc) {
+    return URL.createObjectURL(new Blob([JSON.stringify(fc)], { type: "application/json" }));
+  }
+
+  function buildMap(initialFC) {
+    require([
+      "esri/Map",
+      "esri/views/MapView",
+      "esri/layers/GeoJSONLayer",
+      "esri/layers/FeatureLayer",
+      "esri/widgets/Home",
+      "esri/widgets/ScaleBar",
+      "esri/widgets/Legend",
+      "esri/widgets/Print",
+      "esri/widgets/Expand",
+    ], (Map, MapView, GeoJSONLayer, FeatureLayer, Home, ScaleBar, Legend, Print, Expand) => {
+
+      // TRPA agency boundary — drawn first, beneath everything
+      const boundary = new FeatureLayer({
+        url: TRPA_BOUNDARY_URL,
+        title: "TRPA Boundary",
+        listMode: "hide",                      // keep out of Legend
+        legendEnabled: false,
+        popupEnabled: false,
+        renderer: {
+          type: "simple",
+          symbol: {
+            type: "simple-fill",
+            color: [11, 31, 65, 0.04],         // EIP Navy, very faint fill
+            outline: { color: [11, 31, 65, 0.85], width: 1.6 },
+          },
+        },
+      });
+
+      const layer = new GeoJSONLayer({
+        url: fcToBlobUrl(initialFC),
+        title: "EIP Projects (points)",
+        renderer: buildPointsRenderer(),
+        popupTemplate: buildPopupTemplate(),
+        outFields: ["*"],
+        copyright: "LakeTahoeInfo.org",
+      });
+      state.pointsLayer = layer;
+      state.boundaryLayer = boundary;
+
+      const map = new Map({
+        basemap: "gray-vector",                // Esri Light Gray Canvas (free, anonymous)
+        layers: [boundary, layer],
+      });
+
+      const view = new MapView({
+        container: "map-view",
+        map: map,
+        center: [-120.04, 39.09],
+        zoom: 9,
+        constraints: { minZoom: 7, maxZoom: 19 },
+      });
+      state.view = view;
+
+      view.ui.add(new Home({ view }), "top-left");
+      view.ui.add(new ScaleBar({ view, unit: "imperial" }), "bottom-left");
+
+      const legendExpand = new Expand({
+        view,
+        content: new Legend({ view }),
+        expanded: false,
+        expandIcon: "legend",
+        expandTooltip: "Legend",
+        collapseTooltip: "Collapse legend",
+      });
+      view.ui.add(legendExpand, "top-right");
+
+      const printExpand = new Expand({
+        view,
+        content: new Print({
+          view,
+          printServiceUrl: PRINT_SERVICE_URL,
+        }),
+        expanded: false,
+        expandIcon: "print",
+        expandTooltip: "Print / export map",
+        collapseTooltip: "Close print",
+      });
+      view.ui.add(printExpand, "top-right");
+
+      view.whenLayerView(layer).then(lv => {
+        state.pointsLayerView = lv;
+        applyFilters();
+      });
+
+      view.watch("stationary", stationary => {
+        if (stationary && view.extent) updateExtentAndRender(view);
+      });
+      view.when(() => updateExtentAndRender(view));
+    });
+  }
+
+  function updateExtentAndRender(view) {
+    require(["esri/geometry/support/webMercatorUtils"], wmu => {
+      const geo = wmu.webMercatorToGeographic(view.extent);
+      currentExtent = {
+        xmin: geo.xmin, ymin: geo.ymin,
+        xmax: geo.xmax, ymax: geo.ymax,
+      };
+      renderList();
+    });
+  }
+
+  function reloadPointsData(newFC) {
+    if (!state.pointsLayer) return;
+    state.pointsLayer.url = fcToBlobUrl(newFC);
+  }
+
+  function zoomToFeature(f) {
+    if (!state.view) return;
+    const [lon, lat] = f.geometry.coordinates;
+    state.view.goTo({ center: [lon, lat], zoom: 14 }, { duration: 400 });
+    require(["esri/Graphic"], Graphic => {
+      const g = new Graphic({
+        geometry: { type: "point", longitude: lon, latitude: lat },
+        attributes: f.properties,
+        // Attach our rich template so list-click popups match map-click popups
+        popupTemplate: buildPopupTemplate(),
+      });
+      state.view.openPopup({ location: g.geometry, features: [g] });
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Detailed footprints layer (lazy)
+  // ─────────────────────────────────────────────────────────────────────
+  async function ensureDetailedLoaded() {
+    if (state.detailedLoaded) return;
+    document.getElementById("footprints-status").textContent =
+      "Loading footprints… (~6.8 MB)";
+    const fc = await loadDetailed();
+
+    // Enrich each detailed feature with Category derived from EIP # so
+    // the unique-value renderer + filter clause work on the same field.
+    for (const f of fc.features) {
+      const props = f.properties || {};
+      props.Category = focusAreaFromEIP(props.EIPProjectNumber);
+      props.ProjectURL = props.ProjectID
+        ? `https://www.laketahoeinfo.org/Project/Detail/${props.ProjectID}`
+        : "";
+      f.properties = props;
+    }
+
+    state.detailedFeatures = fc.features;
+    state.detailedLoaded = true;
+    document.getElementById("footprints-status").textContent =
+      `${fc.features.length.toLocaleString()} footprints loaded`;
+    document.getElementById("include-footprints-row").removeAttribute("disabled");
+    refreshExportTargetText();
+
+    require(["esri/layers/GeoJSONLayer"], GeoJSONLayer => {
+      const layer = new GeoJSONLayer({
+        url: fcToBlobUrl(fc),
+        title: "EIP Projects (footprints)",
+        renderer: buildDetailedRenderer(),
+        popupTemplate: buildPopupTemplate(),
+        outFields: ["*"],
+        copyright: "LakeTahoeInfo.org",
+      });
+      state.detailedLayer = layer;
+      // Insert above the TRPA boundary but below the points (so labels/dots stay on top)
+      const boundaryIdx = state.boundaryLayer
+        ? state.view.map.layers.indexOf(state.boundaryLayer)
+        : -1;
+      const insertAt = boundaryIdx >= 0 ? boundaryIdx + 1 : 0;
+      state.view.map.add(layer, insertAt);
+      state.view.whenLayerView(layer).then(lv => {
+        state.detailedLayerView = lv;
+        applyFilters();
+      });
+    });
+  }
+
+  function setFootprintsVisible(on) {
+    if (on) {
+      ensureDetailedLoaded().catch(err => {
+        console.error(err);
+        toast("Failed to load footprints", "error");
+        document.getElementById("footprints-toggle").checked = false;
+      });
+    }
+    if (state.detailedLayer) state.detailedLayer.visible = on;
+    document.getElementById("include-footprints-row")
+      .toggleAttribute("disabled", !on || !state.detailedLoaded);
+    if (!on) document.getElementById("include-footprints").checked = false;
+    refreshExportTargetText();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Exports
+  // ─────────────────────────────────────────────────────────────────────
+  function timestamp() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_` +
+           `${pad(d.getHours())}${pad(d.getMinutes())}`;
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function buildExportFC() {
+    const points = exportTargetFeatures();
+    const incFootprint = document.getElementById("include-footprints").checked
+      && state.detailedLoaded;
+
+    const features = points.slice();
+    if (incFootprint) {
+      const ids = new Set(points.map(f => f.properties.EIPProjectNumber));
+      for (const f of state.detailedFeatures) {
+        if (ids.has(f.properties.EIPProjectNumber)) features.push(f);
+      }
+    }
+    return { type: "FeatureCollection", features };
+  }
+
+  function exportGeoJSON() {
+    const fc = buildExportFC();
+    if (!fc.features.length) {
+      toast("Nothing to export", "error");
+      return;
+    }
+    const blob = new Blob([JSON.stringify(fc, null, 2)], { type: "application/geo+json" });
+    downloadBlob(blob, `eip_projects_${timestamp()}.geojson`);
+    toast(`Exported ${fc.features.length.toLocaleString()} features`);
+  }
+
+  function exportCSV() {
+    const features = exportTargetFeatures();
+    if (!features.length) { toast("Nothing to export", "error"); return; }
+    // Property name → CSV column header (controls order). Includes every
+    // field shown in the popup plus identity, region/state, flags, and lat/lon.
+    const cols = [
+      ["EIPProjectNumber",         "EIPProjectNumber"],
+      ["ProjectID",                "ProjectID"],
+      ["ProjectName",              "ProjectName"],
+      ["Category",                 "FocusArea"],
+      ["EIPProgram",               "Program"],
+      ["Stage",                    "Stage"],
+      ["ProjectDescription",       "ProjectDescription"],
+      ["LeadImplementer",          "LeadImplementer"],
+      ["ProjectRegion",            "Region"],
+      ["ProjectJurisdiction",      "Jurisdiction"],
+      ["ProjectWatershed",         "Watershed"],
+      ["ProjectState",             "State"],
+      ["PlanningStartDate",        "PlanningStart"],
+      ["ImplementationStartDate",  "ImplementationStart"],
+      ["EndDate",                  "EndDate"],
+      ["EstimatedTotalCost",       "EstTotalCost"],
+      ["EstimatedAnnualOperatingCost", "EstAnnualOperatingCost"],
+      ["ProjectThresholdCategories",   "ThresholdCategories"],
+      ["EIPActionPriority",        "ActionPriority"],
+      ["TMDLPollutantSourceCategory", "TMDLPollutantSourceCategory"],
+      ["IsEIPProject",             "IsEIPProject"],
+      ["IsTransportationProject",  "IsTransportationProject"],
+      ["IsLakeClarityProject",     "IsLakeClarityProject"],
+      ["__lat__",                  "Latitude"],
+      ["__lon__",                  "Longitude"],
+      ["ProjectURL",               "ProjectSummaryUrl"],
+      ["ProjectFactSheetUrl",      "ProjectFactSheetUrl"],
+    ];
+    const escape = v => {
+      if (v == null) return "";
+      const s = String(v);
+      if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    };
+    const lines = [cols.map(c => c[1]).join(",")];
+    for (const f of features) {
+      const p = f.properties;
+      const [lon, lat] = f.geometry.coordinates;
+      const row = cols.map(([key]) => {
+        if (key === "__lat__") return lat;
+        if (key === "__lon__") return lon;
+        return p[key];
+      }).map(escape);
+      lines.push(row.join(","));
+    }
+    const blob = new Blob(["\ufeff" + lines.join("\r\n")],
+                          { type: "text/csv;charset=utf-8" });
+    downloadBlob(blob, `eip_projects_${timestamp()}.csv`);
+    toast(`Exported ${features.length.toLocaleString()} rows`);
+  }
+
+  // Load shp-write on demand. We mask Dojo's AMD `define` while the script
+  // runs so the UMD bundle registers itself as `window.shpwrite` (global)
+  // instead of being captured by the ArcGIS AMD loader (which would throw
+  // "multipleDefine" and break the map).
+  let shpwriteLoadPromise = null;
+  function ensureShpWrite() {
+    if (typeof window.shpwrite !== "undefined") return Promise.resolve();
+    if (shpwriteLoadPromise) return shpwriteLoadPromise;
+    shpwriteLoadPromise = new Promise((resolve, reject) => {
+      const savedDefine = window.define;
+      window.define = undefined;     // hide AMD from shp-write's UMD wrapper
+      const s = document.createElement("script");
+      s.src = "https://unpkg.com/shp-write@0.3.2/shpwrite.js";
+      s.onload = () => {
+        window.define = savedDefine;
+        if (typeof window.shpwrite === "undefined")
+          reject(new Error("shp-write loaded but global is missing"));
+        else resolve();
+      };
+      s.onerror = () => {
+        window.define = savedDefine;
+        reject(new Error("shp-write CDN load failed"));
+      };
+      document.head.appendChild(s);
+    });
+    return shpwriteLoadPromise;
+  }
+
+  async function exportShapefile() {
+    const fc = buildExportFC();
+    if (!fc.features.length) { toast("Nothing to export", "error"); return; }
+
+    try {
+      await ensureShpWrite();
+    } catch (err) {
+      console.error(err);
+      toast("Failed to load shapefile library", "error");
+      return;
+    }
+
+    // shp-write 0.3.x: keys "point", "polygon", "polyline" / values are filenames
+    try {
+      window.shpwrite.download(fc, {
+        folder: `eip_projects_${timestamp()}`,
+        types: {
+          point:    "eip_points",
+          polygon:  "eip_polygons",
+          polyline: "eip_lines",
+        },
+      });
+      toast(`Exported shapefile (${fc.features.length.toLocaleString()} features)`);
+    } catch (err) {
+      console.error(err);
+      toast("Shapefile export failed — try GeoJSON", "error");
+    }
+  }
+
+  function setupExportButtons() {
+    document.getElementById("export-geojson").addEventListener("click", exportGeoJSON);
+    document.getElementById("export-csv").addEventListener("click", exportCSV);
+    document.getElementById("export-shapefile").addEventListener("click", exportShapefile);
+    document.getElementById("include-footprints").addEventListener("change",
+      refreshExportTargetText);
+  }
+
+  function setupSelectionButtons() {
+    document.getElementById("sel-all-visible").addEventListener("click", selectVisible);
+    document.getElementById("sel-clear").addEventListener("click", clearSelection);
+
+    const showOnly = document.getElementById("sel-show-only");
+    showOnly.addEventListener("click", () => {
+      if (showOnly.disabled) return;
+      state.showSelectedOnly = !state.showSelectedOnly;
+      showOnly.classList.toggle("is-on", state.showSelectedOnly);
+      showOnly.textContent = state.showSelectedOnly ? "Show all" : "Show selected";
+      applyFilters();
+    });
+  }
+
+  function setupPanelCollapse() {
+    const body = document.getElementById("app-body");
+    const collapseBtn = document.getElementById("panel-collapse");
+    const reopenBtn = document.getElementById("panel-reopen");
+
+    function setCollapsed(yes) {
+      body.classList.toggle("list-collapsed", yes);
+      reopenBtn.hidden = !yes;
+    }
+    collapseBtn.addEventListener("click", () => setCollapsed(true));
+    reopenBtn.addEventListener("click", () => setCollapsed(false));
+  }
+
+  function setupFootprintsToggle() {
+    const sw = document.getElementById("footprints-toggle");
+    sw.addEventListener("calciteSwitchChange", e => {
+      setFootprintsVisible(e.target.checked);
+    });
+    // disable include-footprints checkbox until layer toggled on
+    document.getElementById("include-footprints-row").setAttribute("disabled", "");
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // FC change detection (for hybrid live refresh)
+  // ─────────────────────────────────────────────────────────────────────
+  function fcChanged(a, b) {
+    if (!a || !b) return true;
+    if (a.features.length !== b.features.length) return true;
+    const aIdx = new Map();
+    for (const f of a.features) aIdx.set(f.properties.EIPProjectNumber, f);
+    for (const f of b.features) {
+      const prev = aIdx.get(f.properties.EIPProjectNumber);
+      if (!prev) return true;
+      const [bx, by] = f.geometry.coordinates;
+      const [ax, ay] = prev.geometry.coordinates;
+      if (Math.abs(ax - bx) > 1e-6 || Math.abs(ay - by) > 1e-6) return true;
+    }
+    return false;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Init
+  // ─────────────────────────────────────────────────────────────────────
+  async function init() {
+    setStatus("snapshot", "Loading snapshot…");
+    try {
+      const local = await loadLocalSnapshot();
+      // ensure derived Category is present (snapshot was built with it,
+      // but re-derive defensively in case the live refresh path ran first)
+      for (const f of local.features) {
+        if (!f.properties.Category) {
+          f.properties.Category = focusAreaFromEIP(f.properties.EIPProjectNumber);
+        }
+      }
+      state.allFeatures = local.features;
+
+      buildCategoryFilters();
+      buildStageFilters();
+      buildAttributeComboboxes();
+      setupFlagPills();
+      setupResetButton();
+      setupSearch();
+      setupSelectionButtons();
+      setupExportButtons();
+      setupFootprintsToggle();
+      setupPanelCollapse();
+      buildMap(local);
+      refreshSelectionUI();
+
+      setStatus("snapshot", `Snapshot · ${local.features.length.toLocaleString()} projects`);
+    } catch (err) {
+      console.error("Failed to load local snapshot:", err);
+      setStatus("error", "Failed to load data");
+      return;
+    }
+
+    // Background live "ping" — confirms the upstream API is reachable but
+    // doesn't swap features. The snapshot carries 32 fields per project
+    // (from GetProject); the live simple endpoint only has basics, so
+    // hot-swapping would lose the rich popup data. The nightly GitHub
+    // Action keeps the snapshot fresh.
+    try {
+      const live = await loadLiveRefresh();
+      const localFC = { type: "FeatureCollection", features: state.allFeatures };
+      const drift = fcChanged(localFC, live);
+      const note = drift
+        ? `Live (delta detected — snapshot may be stale)`
+        : `Snapshot · ${state.allFeatures.length.toLocaleString()} projects`;
+      setStatus(drift ? "snapshot" : "snapshot", note);
+    } catch (err) {
+      console.warn("Live ping skipped:", err.message);
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", init);
+</script>
+
+</body>
+</html>
