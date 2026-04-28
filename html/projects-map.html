@@ -1936,8 +1936,10 @@
         popupTemplate: buildPopupTemplate(),
         outFields: ["*"],
         copyright: "LakeTahoeInfo.org",
-        // Drape pins on terrain in 3D so they sit on the ground, not at sea level
-        elevationInfo: { mode: "on-the-ground" },
+        // Pins billboard at ground level in 3D — relative-to-ground places
+        // them at terrain elevation while keeping the symbol facing the
+        // camera. (on-the-ground would rasterize them flat onto the surface.)
+        elevationInfo: { mode: "relative-to-ground", offset: 0 },
       });
       state.pointsLayer = layer;
       state.boundaryLayer = boundary;
@@ -2052,63 +2054,33 @@
         view.ui.add(printExpand, "top-right");
         view._eipWidgets.push(printExpand);
 
-        // Three direct toggle actions for map options. No Expand panel —
-        // just three Calcite Actions. Each lights up when its option is
-        // active; click to flip.
-        const makeToggleAction = (icon, label, isActive, onClick) => {
-          const a = document.createElement("calcite-action");
-          a.setAttribute("icon", icon);
-          a.setAttribute("text", label);
-          a.setAttribute("text-enabled", "");
-          a.setAttribute("title", label);
-          a.setAttribute("scale", "s");
-          a.style.background = "var(--white)";
-          if (isActive) a.setAttribute("active", "");
-          a.addEventListener("click", () => onClick(a));
-          view.ui.add(a, "top-right");
-          view._eipWidgets.push(a);
-          return a;
-        };
-
-        // 3D view toggle
-        makeToggleAction("view-mode-3d", "3D view",
-          view.type === "3d",
-          async (btn) => {
-            const goTo3D = !btn.hasAttribute("active");
-            btn.toggleAttribute("active", goTo3D);
-            try {
-              if (goTo3D) await state._activate3D();
-              else        await state._activate2D();
-            } catch (err) {
-              console.error(err);
-              toast("Couldn't switch view", "error");
-              btn.toggleAttribute("active", !goTo3D);
-            }
-          });
-
-        // Cluster toggle
-        makeToggleAction("urban-model", "Cluster points",
-          !!state.clusterOn,
-          (btn) => {
-            const on = !btn.hasAttribute("active");
-            btn.toggleAttribute("active", on);
-            state.clusterOn = on;
-            setClusterEnabled(on);
-          });
-
-        // Footprints toggle
-        makeToggleAction("polygon-vertices", "Show project footprints",
-          !!state.footprintsOn,
-          (btn) => {
-            const on = !btn.hasAttribute("active");
-            btn.toggleAttribute("active", on);
-            state.footprintsOn = on;
-            setFootprintsVisible(on);
-          });
+        // Map Options Expand (top-right, alongside Legend & Print). Pulls
+        // the hidden #layer-controls node into its panel; we rescue it back
+        // to its host on detach so toggle state and event handlers survive
+        // view swaps.
+        const layerControls = document.getElementById("layer-controls");
+        const layerExpand = new Expand({
+          view,
+          content: layerControls,
+          expanded: false,
+          expandIcon: "sliders-horizontal",
+          expandTooltip: "Map options",
+          collapseTooltip: "Close map options",
+        });
+        view.ui.add(layerExpand, "top-right");
+        view._eipWidgets.push(layerExpand);
+        view._layerExpand = layerExpand;
       }
 
       function detachWidgets(view) {
         if (!view._eipWidgets) return;
+        // Rescue the shared #layer-controls node back to its hidden host so
+        // its child toggles + listeners survive into the next view's Expand.
+        const layerHost = document.getElementById("layer-controls-host");
+        const layerControls = document.getElementById("layer-controls");
+        if (layerHost && layerControls && layerControls.parentNode !== layerHost) {
+          layerHost.appendChild(layerControls);
+        }
         for (const w of view._eipWidgets) {
           try { view.ui.remove(w); } catch (e) {}
           if (w && typeof w.destroy === "function") {
