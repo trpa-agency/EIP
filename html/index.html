@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Lake Tahoe EIP — Tools &amp; Dashboards</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <link rel="apple-touch-icon" href="assets/favicon.png" />
 
   <link href="https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 
@@ -11,10 +13,13 @@
     :root {
       --eip-green:        #6EBE44;
       --eip-blue:         #007DC3;
+      --eip-bright-blue:  #1863DC;     /* secondary action / hover (parent site CTA) */
       --eip-orange:       #F16022;
       --eip-navy:         #0B1F41;
       --eip-blue-light:   #E0F0FA;
       --eip-navy-light:   #E6E8EC;
+      --eip-page-bg:      #F9F9F9;     /* parent-site neutral page background */
+      --eip-body-text:    #212121;     /* softer-than-black body copy */
       --gray-border:      #DDDDDD;
       --white:            #FFFFFF;
     }
@@ -54,12 +59,11 @@
       font-weight: 700;
       line-height: 1;
     }
-    .header-accent {
-      width: 4px;
-      height: 26px;
-      background: var(--eip-orange);
-      border-radius: 2px;
+    .header-logo {
+      width: 32px; height: 30px;
       flex-shrink: 0;
+      object-fit: contain;
+      filter: brightness(1.6) saturate(1.1);
     }
 
     /* ── Content ── */
@@ -101,22 +105,39 @@
     }
 
     .card {
-      background: var(--white);
+      position: relative;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(224,240,250,0.85) 100%),
+        radial-gradient(ellipse at top right, rgba(0,125,195,0.18) 0%, transparent 60%);
+      background-color: var(--white);
       border-radius: 12px;
       padding: 1.5rem;
       text-decoration: none;
       color: inherit;
       box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-      border-top: 4px solid var(--eip-blue);
-      transition: transform 150ms ease-out, box-shadow 150ms ease-out;
+      border-top: 4px solid var(--eip-bright-blue);   /* parent-site CTA accent */
+      transition: transform 150ms ease-out, box-shadow 150ms ease-out, border-top-color 150ms ease-out;
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
+      overflow: hidden;
+    }
+    /* Subtle Tahoe-ridgeline silhouette as a watermark — pure SVG, no asset */
+    .card::after {
+      content: "";
+      position: absolute;
+      inset: auto 0 0 0;
+      height: 38%;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 120' preserveAspectRatio='none'><path d='M0,120 L0,80 L60,55 L130,75 L200,40 L280,65 L360,30 L440,60 L520,45 L600,70 L600,120 Z' fill='%230B1F41' opacity='0.06'/></svg>");
+      background-repeat: no-repeat;
+      background-size: 100% 100%;
+      pointer-events: none;
     }
 
     .card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+      transform: translateY(-3px);
+      box-shadow: 0 6px 18px rgba(24,99,220,0.15);
+      border-top-color: var(--eip-orange);
     }
 
     .card.placeholder {
@@ -175,7 +196,7 @@
 <body>
 
   <header id="app-header">
-    <div class="header-accent"></div>
+    <img src="assets/favicon.png" alt="EIP" class="header-logo" />
     <div class="header-titles">
       <span class="agency">Tahoe Regional Planning Agency</span>
       <h1>Lake Tahoe EIP</h1>
@@ -197,9 +218,10 @@
         <span class="badge">Map</span>
         <h3>EIP Projects Map</h3>
         <p>
-          Interactive map of every EIP project with a known location. Search
-          by name or EIP number, filter by program category, and click a
-          point to see project details and link out to LakeTahoeInfo.
+          Interactive map of every EIP project with a known location.
+          Filter by Focus Area, Stage, watershed, jurisdiction, and program.
+          Select projects to export as GeoJSON, Shapefile, or CSV.
+          Toggle 3D terrain, footprints, and clusters.
         </p>
         <span class="arrow">Open map →</span>
       </a>

@@ -55,6 +55,7 @@ LOG_PATH = SCRIPT_DIR / "Build_EIP_ProjectLocations.log"
 SIMPLE_JSON_PATH = DATA_DIR / "simple.json"
 DETAILED_GEOJSON_PATH = DATA_DIR / "detailed.geojson"
 PROJECTS_GEOJSON_PATH = DATA_DIR / "projects.geojson"
+ASPATIAL_JSON_PATH = DATA_DIR / "projects_aspatial.json"
 
 # ------------------------------------------------------------------------
 # Lake Tahoe Info endpoints
@@ -666,46 +667,43 @@ def build_projects_geojson(df_simple):
                   f"(pn_key={pn_key}, lat_key={lat_key}, lon_key={lon_key})")
         return
 
-    # Pass 1 — collect candidate features (those with valid coordinates)
-    candidates = []
-    skipped_no_loc = 0
-    skipped_bad_coords = 0
+    # Pass 1 — split records into spatial (have valid coords) and aspatial
+    # (NoLocation flag set, or coords missing/invalid). Aspatial records still
+    # get included in projects_aspatial.json so they show up in CSV exports.
+    spatial = []     # list of (row, lat, lon)
+    aspatial = []    # list of row
     for _, r in df_simple.iterrows():
         if nl_key and bool(r.get(nl_key)):
-            skipped_no_loc += 1
+            aspatial.append(r)
             continue
         try:
             lat = float(r[lat_key])
             lon = float(r[lon_key])
         except (TypeError, ValueError):
-            skipped_bad_coords += 1
+            aspatial.append(r)
             continue
         if pd.isna(lat) or pd.isna(lon):
-            skipped_bad_coords += 1
+            aspatial.append(r)
             continue
-        candidates.append((r, lat, lon))
+        spatial.append((r, lat, lon))
 
-    log.info(f"projects.geojson candidates: {len(candidates):,} "
-             f"(skipped {skipped_no_loc} NoLocation, {skipped_bad_coords} bad-coords)")
+    log.info(f"Records split: {len(spatial):,} spatial · {len(aspatial):,} aspatial "
+             f"(basin-wide / no specific location)")
 
-    # Pass 2 — parallel-fetch GetProject for every candidate
-    eips = [str(r.get(pn_key, "")).strip() for r, _, _ in candidates]
-    eips_unique = sorted({e for e in eips if e})
+    # Pass 2 — parallel-fetch GetProject for ALL projects (one batch)
+    all_eips = sorted({str(r.get(pn_key, "")).strip() for r in
+                       (list(r for r, _, _ in spatial) + aspatial)
+                       if r.get(pn_key)})
     t0 = time.time()
-    log.info(f"Fetching GetProject for {len(eips_unique)} EIP numbers...")
-    details = fetch_all_project_details(eips_unique, max_workers=8)
-    log.info(f"GetProject: {len(details):,}/{len(eips_unique):,} returned data "
+    log.info(f"Fetching GetProject for {len(all_eips)} EIP numbers...")
+    details = fetch_all_project_details(all_eips, max_workers=8)
+    log.info(f"GetProject: {len(details):,}/{len(all_eips):,} returned data "
              f"({time.time() - t0:.1f}s)")
 
-    # Pass 3 — assemble features with merged properties
-    features = []
-    for r, lat, lon in candidates:
+    def build_props(r, rec):
         pn = str(r.get(pn_key, "")).strip()
         pid = r.get(pid_key) if pid_key else None
         pid_str = str(pid).strip() if pid is not None and not pd.isna(pid) else ""
-
-        rec = details.get(pn)
-
         props = {
             "ProjectID": pid_str,
             "EIPProjectNumber": pn,
@@ -713,39 +711,47 @@ def build_projects_geojson(df_simple):
             "Category": focus_area_from_eip(pn),
             "ProjectURL": project_url_for(rec, pid_str),
         }
+        # Merge in the rich GetProject fields. Use None for missing so
+        # downstream consumers (popup, exports) have a consistent schema.
+        for field in GET_PROJECT_FIELDS:
+            val = rec.get(field) if rec else None
+            if isinstance(val, float) and (val != val):   # NaN
+                val = None
+            props[field] = val
+        return props
 
-        # Merge in the rich GetProject fields. Use empty string / None for
-        # missing fields so downstream consumers (popup, exports) have a
-        # consistent schema.
-        if rec:
-            for field in GET_PROJECT_FIELDS:
-                val = rec.get(field)
-                # Normalize NaN-y values
-                if val is None:
-                    props[field] = None
-                elif isinstance(val, float) and (val != val):  # NaN
-                    props[field] = None
-                else:
-                    props[field] = val
-        else:
-            for field in GET_PROJECT_FIELDS:
-                props[field] = None
-
+    # Pass 3 — projects.geojson (spatial features for the map)
+    features = []
+    for r, lat, lon in spatial:
+        rec = details.get(str(r.get(pn_key, "")).strip())
         features.append({
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [lon, lat]},
-            "properties": props,
+            "properties": build_props(r, rec),
         })
-
-    out = {"type": "FeatureCollection", "features": features}
     PROJECTS_GEOJSON_PATH.write_text(
-        json.dumps(out, ensure_ascii=False),
+        json.dumps({"type": "FeatureCollection", "features": features}, ensure_ascii=False),
         encoding="utf-8",
     )
-    enriched = sum(1 for f in features if f["properties"].get("Stage") is not None)
+    enriched_spatial = sum(1 for f in features if f["properties"].get("Stage") is not None)
     log.info(
         f"Wrote {len(features):,} features to {PROJECTS_GEOJSON_PATH} "
-        f"({enriched:,} enriched with GetProject data)"
+        f"({enriched_spatial:,} enriched with GetProject data)"
+    )
+
+    # Pass 4 — projects_aspatial.json (no-location records, for CSV exports)
+    aspatial_records = []
+    for r in aspatial:
+        rec = details.get(str(r.get(pn_key, "")).strip())
+        aspatial_records.append(build_props(r, rec))
+    ASPATIAL_JSON_PATH.write_text(
+        json.dumps(aspatial_records, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    enriched_aspatial = sum(1 for p in aspatial_records if p.get("Stage") is not None)
+    log.info(
+        f"Wrote {len(aspatial_records):,} records to {ASPATIAL_JSON_PATH} "
+        f"({enriched_aspatial:,} enriched with GetProject data)"
     )
 
 

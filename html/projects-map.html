@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>EIP Projects Map — Lake Tahoe EIP</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <link rel="apple-touch-icon" href="assets/favicon.png" />
 
   <!-- Calcite Design System -->
   <script type="module" src="https://js.arcgis.com/calcite-components/5.0"></script>
@@ -45,10 +47,15 @@
       background: var(--gray-bg);
     }
 
-    #app-wrapper {
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
+    /* Calcite Shell takes the full viewport; #app-header sits in slot="header" */
+    calcite-shell { height: 100vh; }
+    calcite-shell-panel#cs-sidebar { --calcite-shell-panel-min-width: 280px; --calcite-shell-panel-max-width: 280px; }
+    calcite-shell-panel#cs-list    { --calcite-shell-panel-min-width: 340px; --calcite-shell-panel-max-width: 340px; }
+    /* Make the inner panels fill their shell-panel container */
+    calcite-shell-panel #sidebar,
+    calcite-shell-panel #list-panel {
+      height: 100%;
+      width: 100%;
     }
 
     /* ── Header ── */
@@ -65,11 +72,13 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.35);
     }
 
-    .header-accent {
-      width: 4px; height: 26px;
-      background: var(--eip-orange);
-      border-radius: 2px;
+    .header-logo {
+      width: 32px; height: 30px;
       flex-shrink: 0;
+      object-fit: contain;
+      /* Light wash so the navy mountains are visible on the navy bar
+         while the orange water stays vivid */
+      filter: brightness(1.6) saturate(1.1);
     }
 
     .back-link {
@@ -116,18 +125,20 @@
     .live-dot.snapshot { background: #b5a64c; box-shadow: none; }
     .live-dot.error { background: var(--eip-orange); box-shadow: none; }
 
-    /* ── Main layout ── */
-    #app-body {
-      flex: 1;
-      display: grid;
-      grid-template-columns: 280px 1fr 340px;
-      min-height: 0;
-      transition: grid-template-columns 200ms ease-out;
+    /* Side-panel layout is owned by Calcite Shell — collapse via the
+       shell-panel `collapsed` attribute, which animates and notifies
+       ResizeObserver so the ArcGIS view redraws cleanly. */
+
+    /* Map Layers panel (hosted in a Calcite Expand on the map) */
+    .layer-controls-panel {
+      padding: 0.85rem 1rem;
+      min-width: 240px;
+      max-width: 280px;
+      background: var(--white);
+      font-family: 'Lexend Deca', system-ui, sans-serif;
+      color: var(--eip-navy);
     }
-    #app-body.list-collapsed {
-      grid-template-columns: 280px 1fr 0;
-    }
-    #app-body.list-collapsed #list-panel { display: none; }
+
 
     /* ── Sidebar ── */
     #sidebar {
@@ -139,7 +150,7 @@
     }
 
     .sidebar-section {
-      padding: 1.1rem 1.25rem;
+      padding: 0.85rem 1.1rem;
       border-bottom: 1px solid var(--gray-border);
     }
 
@@ -151,31 +162,64 @@
       margin-bottom: 0.85rem;
     }
     .filter-block {
-      margin-bottom: 0.95rem;
+      margin-bottom: 0.7rem;
     }
     .filter-block:last-child { margin-bottom: 0; }
     .filter-block-label {
-      font-size: 0.66rem;
+      font-size: 0.64rem;
       font-weight: 600;
       letter-spacing: 0.06em;
       text-transform: uppercase;
       color: var(--eip-navy);
-      opacity: 0.65;
-      margin-bottom: 0.4rem;
+      opacity: 0.62;
+      margin-bottom: 0.3rem;
     }
 
-    .flag-pills {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.3rem;
-    }
-    .flag-pill {
-      font-size: 0.72rem;
-    }
-    /* tighten Calcite block visuals inside filters-section */
+    /* Calcite Block visuals — secondary filters are tucked inside collapsibles */
     .filters-section calcite-block {
-      margin: 0 0 0.95rem 0;
+      margin: 0 0 0.5rem 0;
       --calcite-block-padding: 0;
+      /* heading reads more like the small uppercase filter-block-label */
+      --calcite-block-heading-text-color: var(--eip-navy);
+      --calcite-color-text-2: var(--eip-navy);
+    }
+    .filters-section calcite-block::part(header) {
+      padding: 0.4rem 0.6rem;
+    }
+    .filters-section calcite-block .filter-pills-grid {
+      padding: 0.5rem 0.6rem 0.7rem;
+    }
+
+    /* Watershed has 59 values — scroll inside the block + a small search */
+    .pill-search {
+      width: calc(100% - 1.2rem);
+      margin: 0 0.6rem 0.4rem;
+      padding: 0.35rem 0.6rem;
+      border: 1px solid var(--gray-border);
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 0.78rem;
+      color: var(--eip-navy);
+      outline: none;
+    }
+    .pill-search:focus { border-color: var(--eip-blue); }
+    .pill-grid-scroll {
+      max-height: 220px;
+      overflow-y: auto;
+      padding: 0 0.6rem 0.7rem;
+    }
+    .pill-grid-scroll .filter-pills-grid { padding: 0; }
+
+    /* "More filters" subtle group label between primary and secondary blocks */
+    .filter-group-label {
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--eip-navy);
+      opacity: 0.4;
+      margin: 0.55rem 0 0.4rem;
+      padding: 0 0.25rem;
     }
 
     .section-label {
@@ -188,37 +232,149 @@
       margin-bottom: 0.6rem;
     }
 
-    .filter-row {
+    /* Pill-toggle filters (Focus Area, Stage, Project type) */
+    .filter-pills-grid {
       display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+    .filter-pill {
+      --c: #7a8390;             /* swatch color (border, hover wash, on-bg) */
+      --c-on-text: #FFFFFF;     /* text color when saturated (set per pill via JS) */
+      display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 0.4rem 0;
-      cursor: pointer;
-      font-size: 0.84rem;
-      font-weight: 400;
+      gap: 0.4rem;
+      padding: 0.32rem 0.75rem;
+      border-radius: 999px;
+      border: 1.5px solid var(--c);
+      background: transparent;
+      /* Off-state text always EIP Navy for guaranteed AA contrast on white */
       color: var(--eip-navy);
-    }
-    .filter-row:hover .filter-name { color: var(--eip-blue); }
-
-    .filter-row input[type="checkbox"] {
-      accent-color: var(--eip-blue);
+      font-family: inherit;
+      font-size: 0.76rem;
+      font-weight: 600;
       cursor: pointer;
-      flex-shrink: 0;
+      letter-spacing: 0.01em;
+      line-height: 1.1;
+      transition: background 120ms ease-out, color 120ms ease-out, transform 80ms ease-out;
+      white-space: nowrap;
     }
-    .filter-name { flex: 1; line-height: 1.25; }
-    .filter-count {
-      font-size: 0.72rem;
-      color: #7a8390;
+    .filter-pill:hover { background: color-mix(in srgb, var(--c) 12%, transparent); }
+    .filter-pill:active { transform: scale(0.97); }
+    .filter-pill:focus-visible {
+      outline: 2px solid var(--eip-orange);
+      outline-offset: 2px;
+    }
+    .filter-pill.is-on {
+      background: var(--c);
+      color: var(--c-on-text);   /* navy or white per swatch lightness */
+    }
+    .filter-pill .count {
+      font-size: 0.68rem;
+      opacity: 0.75;
       font-variant-numeric: tabular-nums;
-      flex-shrink: 0;
+      font-weight: 500;
     }
-    .filter-color-dot {
-      width: 10px; height: 10px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
+    .filter-pill.is-on .count { opacity: 0.9; }
 
-    #reset-filters { margin-top: 0.6rem; width: 100%; }
+    /* Reset button (bottom of filter section) */
+    .reset-row {
+      display: flex;
+      justify-content: center;
+      padding-top: 0.6rem;
+      border-top: 1px dashed var(--gray-border);
+      margin-top: 0.4rem;
+    }
+    .reset-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.45rem 1.1rem;
+      border-radius: 999px;
+      border: 1.5px solid var(--eip-orange);
+      background: transparent;
+      color: var(--eip-orange);
+      font-family: inherit;
+      font-size: 0.76rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 120ms ease-out, color 120ms ease-out, transform 80ms ease-out;
+    }
+    .reset-pill:hover {
+      background: var(--eip-orange);
+      color: var(--white);
+    }
+    .reset-pill:active { transform: scale(0.97); }
+    .reset-pill .reset-icon { font-size: 0.95em; line-height: 1; }
+
+    /* Export pill — same shape as reset, EIP Green for positive action */
+    .export-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.55rem 1.2rem;
+      border-radius: 999px;
+      border: 1.5px solid var(--eip-green);
+      background: var(--eip-green);
+      color: var(--white);
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 120ms ease-out, color 120ms ease-out, transform 80ms ease-out;
+    }
+    .export-pill:hover {
+      background: #5fa838;
+      border-color: #5fa838;
+    }
+    .export-pill:active { transform: scale(0.97); }
+    .export-pill[disabled] {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    .export-pill .export-icon { font-size: 1em; line-height: 1; }
+    .export-row {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.5rem;
+    }
+    /* Outlined sibling of .export-pill — same shape, EIP Blue */
+    .copy-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.55rem 1rem;
+      border-radius: 999px;
+      border: 1.5px solid var(--eip-blue);
+      background: transparent;
+      color: var(--eip-blue);
+      font-family: inherit;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 120ms ease-out, color 120ms ease-out, transform 80ms ease-out;
+    }
+    .copy-pill:hover {
+      background: var(--eip-blue);
+      color: var(--white);
+    }
+    .copy-pill:active { transform: scale(0.97); }
+    .copy-pill[disabled] { opacity: 0.5; pointer-events: none; }
+    .export-footnote {
+      font-size: 0.72rem;
+      color: #5a6577;
+      line-height: 1.4;
+      text-align: center;
+      margin-bottom: 0.7rem;
+    }
 
     /* footprints toggle */
     .toggle-row {
@@ -258,37 +414,59 @@
       position: relative;
       min-width: 0;
       min-height: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;          /* keeps absolutely-positioned tabs inside */
     }
     #map-view { width: 100%; height: 100%; }
 
-    /* Reopen tab — visible only when the right panel is collapsed */
-    .panel-reopen {
+    /* Vertical side tabs — always visible. Sit at the panel/map boundary
+       (or the viewport edge when the panel is collapsed). Click toggles
+       the corresponding Calcite Shell Panel's collapsed state. */
+    .panel-tab {
       position: absolute;
       top: 50%;
-      right: 0;
-      transform: translateY(-50%);
       background: var(--white);
       color: var(--eip-navy);
       border: 1px solid var(--gray-border);
-      border-right: none;
-      border-radius: 8px 0 0 8px;
-      padding: 0.85rem 0.4rem;
+      padding: 1rem 0.45rem;
       cursor: pointer;
-      box-shadow: -1px 1px 4px rgba(0,0,0,0.08);
       font-family: inherit;
       font-size: 0.72rem;
       font-weight: 600;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.08em;
       writing-mode: vertical-rl;
-      transform-origin: center;
-      transform: translateY(-50%) rotate(180deg);
-      z-index: 60;
-      transition: background 100ms ease-out, color 100ms ease-out;
+      z-index: 110;                      /* above #app-header (z-index:100) */
+      transition: background 100ms ease-out, color 100ms ease-out, transform 80ms ease-out;
     }
-    .panel-reopen:hover {
+    .panel-tab:focus-visible {
+      outline: 2px solid var(--eip-orange);
+      outline-offset: 2px;
+    }
+    /* Border radius lives on the map-facing edge so the flat side hugs
+       the panel. Each side uses the writing-mode that puts characters
+       facing OUT toward the map (reader tilts head AWAY from the panel). */
+    .panel-tab.right {
+      right: 0;
+      border-right: none;
+      border-radius: 8px 0 0 8px;          /* round LEFT (map-facing), flat RIGHT (panel) */
+      box-shadow: -1px 1px 4px rgba(0,0,0,0.08);
+      transform: translateY(-50%);
+      writing-mode: sideways-lr;           /* chars face LEFT, reads bottom-to-top */
+    }
+    .panel-tab.left {
+      left: 0;
+      border-left: none;
+      border-radius: 0 8px 8px 0;          /* round RIGHT (map-facing), flat LEFT (panel) */
+      box-shadow: 1px 1px 4px rgba(0,0,0,0.08);
+      transform: translateY(-50%);
+      /* inherits writing-mode: vertical-rl from .panel-tab — chars face RIGHT, reads top-to-bottom */
+    }
+    .panel-tab:hover {
       background: var(--eip-blue-light);
       color: var(--eip-blue);
     }
+    .panel-tab:active { transform: translateY(-50%) scale(0.96); }
 
     /* ── List panel ── */
     #list-panel {
@@ -368,37 +546,6 @@
       color: var(--white);
     }
 
-    /* List collapse / hide button (sits in panel header) */
-    .panel-collapse-btn {
-      background: none;
-      border: none;
-      color: #7a8390;
-      cursor: pointer;
-      padding: 4px 6px;
-      font-size: 1rem;
-      line-height: 1;
-      border-radius: 4px;
-      transition: background 100ms ease-out, color 100ms ease-out;
-    }
-    .panel-collapse-btn:hover {
-      background: var(--eip-blue-light);
-      color: var(--eip-blue);
-    }
-    .panel-header-row {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 0.5rem;
-    }
-    .panel-header-row .panel-title {
-      font-size: 0.62rem;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--eip-navy);
-      opacity: 0.72;
-      flex: 1;
-    }
 
     #list-scroll {
       flex: 1;
@@ -611,11 +758,11 @@
 </head>
 <body>
 
-<div id="app-wrapper">
+<calcite-shell id="app-shell">
 
   <!-- ── HEADER ── -->
-  <header id="app-header">
-    <div class="header-accent"></div>
+  <header slot="header" id="app-header">
+    <img src="assets/favicon.png" alt="EIP" class="header-logo" />
     <a href="index.html" class="back-link">← Tools</a>
     <div class="header-divider"></div>
     <div class="header-titles">
@@ -626,101 +773,119 @@
       <span id="status-dot" class="live-dot snapshot"></span>
       <span id="status-text">Loading…</span>
     </div>
+    <calcite-action
+      id="header-info"
+      icon="information"
+      text="About this dashboard"
+      label="About this dashboard"
+      title="About this dashboard"
+      scale="s"
+      appearance="transparent"
+      style="--calcite-color-text-1: #fff; --calcite-color-text-3: #fff;"
+    ></calcite-action>
+    <calcite-popover
+      reference-element="header-info"
+      placement="bottom-end"
+      auto-close="true"
+      heading="About this dashboard"
+      closable="true"
+    >
+      <div style="padding:0.85rem 1rem; max-width:340px; font-size:0.8rem; line-height:1.55; color: var(--eip-navy);">
+        <p style="margin-bottom:0.55rem;">
+          The map shows every EIP project with a known location. Focus
+          Areas are derived from the EIP # prefix and match
+          LakeTahoeInfo's four official categories.
+        </p>
+        <p style="margin-bottom:0.55rem;">
+          <strong>Some projects are basin-wide</strong> — research,
+          monitoring, planning, or other work without a single specific
+          point on the map. Those don't appear as pins but are included
+          in the <strong>CSV export</strong> with empty lat/lon so you
+          have the complete EIP record list.
+        </p>
+        <p style="margin-bottom:0.55rem;">
+          Click any pin or list row to view the project on
+          <a href="https://www.laketahoeinfo.org" target="_blank"
+             rel="noopener" style="color: var(--eip-blue);">LakeTahoeInfo</a>.
+        </p>
+        <p style="font-size:0.72rem; color:#7a8390; margin:0;">
+          Snapshot data refreshed nightly via GitHub Actions.
+        </p>
+      </div>
+    </calcite-popover>
   </header>
 
-  <div id="app-body">
-
-    <!-- ── SIDEBAR ── -->
+  <!-- ── LEFT PANEL (Calcite Shell handles dock layout + collapse) ── -->
+  <calcite-shell-panel slot="panel-start" id="cs-sidebar" display-mode="dock">
     <aside id="sidebar">
       <div class="sidebar-section filters-section">
-        <div class="filter-bar">
-          <span class="section-label" style="margin:0;">Filters</span>
-          <calcite-button
-            id="reset-filters"
-            appearance="outline"
-            kind="neutral"
-            scale="s"
-            icon-start="reset"
-          >
-            Reset
-          </calcite-button>
-        </div>
-
         <div class="filter-block">
           <div class="filter-block-label">EIP Focus Area</div>
-          <div id="category-filters"></div>
+          <div id="category-filters" class="filter-pills-grid"></div>
         </div>
 
         <div class="filter-block">
           <div class="filter-block-label">Stage</div>
-          <div id="stage-filters"></div>
+          <div id="stage-filters" class="filter-pills-grid"></div>
         </div>
 
-        <div class="filter-block">
-          <div class="filter-block-label">Program</div>
-          <calcite-combobox
-            id="program-filter"
-            placeholder="All programs"
-            selection-mode="multiple"
-            scale="s"
-            overlay-positioning="fixed"
-          ></calcite-combobox>
-        </div>
+        <div class="filter-group-label">More filters</div>
 
-        <div class="filter-block">
-          <div class="filter-block-label">Jurisdiction</div>
-          <calcite-combobox
-            id="jurisdiction-filter"
-            placeholder="All jurisdictions"
-            selection-mode="multiple"
-            scale="s"
-            overlay-positioning="fixed"
-          ></calcite-combobox>
-        </div>
-
-        <calcite-block heading="Watershed" collapsible scale="s" id="watershed-block">
-          <calcite-combobox
-            id="watershed-filter"
-            placeholder="All watersheds"
-            selection-mode="multiple"
-            scale="s"
-            overlay-positioning="fixed"
-          ></calcite-combobox>
+        <calcite-block heading="Project type" collapsible scale="s" id="project-type-block">
+          <div id="project-type-pills" class="filter-pills-grid">
+            <button class="filter-pill" data-flag="IsEIPProject"
+              style="--c: #5a6577; --c-on-text: var(--white);"
+              title="Show only projects flagged as EIP" aria-pressed="false">EIP</button>
+            <button class="filter-pill" data-flag="IsTransportationProject"
+              style="--c: #5a6577; --c-on-text: var(--white);"
+              title="Show only Transportation projects" aria-pressed="false">Transportation</button>
+            <button class="filter-pill" data-flag="IsLakeClarityProject"
+              style="--c: #5a6577; --c-on-text: var(--white);"
+              title="Show only Lake Clarity Crediting projects" aria-pressed="false">Lake Clarity</button>
+          </div>
         </calcite-block>
 
-        <div class="filter-block">
-          <div class="filter-block-label">Project type</div>
-          <div class="flag-pills">
-            <button class="pill-btn flag-pill" data-flag="IsEIPProject">EIP</button>
-            <button class="pill-btn flag-pill" data-flag="IsTransportationProject">Transportation</button>
-            <button class="pill-btn flag-pill" data-flag="IsLakeClarityProject">Lake Clarity</button>
+        <calcite-block heading="Program" collapsible scale="s" id="program-block">
+          <div id="program-pills" class="filter-pills-grid"></div>
+        </calcite-block>
+
+        <calcite-block heading="Jurisdiction" collapsible scale="s" id="jurisdiction-block">
+          <div id="jurisdiction-pills" class="filter-pills-grid"></div>
+        </calcite-block>
+
+        <calcite-block heading="Watershed" collapsible scale="s" id="watershed-block">
+          <input id="watershed-search" class="pill-search" type="text"
+            placeholder="Search watersheds…" autocomplete="off"
+            aria-label="Search watershed names" />
+          <div class="pill-grid-scroll">
+            <div id="watershed-pills" class="filter-pills-grid"></div>
           </div>
+        </calcite-block>
+
+        <div class="reset-row">
+          <button id="reset-filters" class="reset-pill" type="button"
+            title="Restore all filter pills, comboboxes, search, and project-type flags to their defaults">
+            <span class="reset-icon" aria-hidden="true">↺</span> Reset filters
+          </button>
         </div>
       </div>
 
-      <div class="sidebar-section">
-        <div class="section-label">Project Footprints</div>
-        <div class="toggle-row">
-          <span>Show polygons &amp; lines</span>
-          <calcite-switch id="footprints-toggle" scale="s"></calcite-switch>
-        </div>
-        <div class="toggle-status" id="footprints-status">
-          Off — points only (~250 KB)
-        </div>
-      </div>
 
       <div class="sidebar-section">
         <div class="section-label">Export</div>
-        <div class="export-buttons">
-          <calcite-button id="export-geojson" icon-start="download" scale="s" kind="brand">
-            GeoJSON
-          </calcite-button>
-          <calcite-button id="export-shapefile" icon-start="download" scale="s" appearance="outline">
-            Shapefile (.zip)
-          </calcite-button>
-          <calcite-button id="export-csv" icon-start="download" scale="s" appearance="outline">
-            CSV (lat/lon)
-          </calcite-button>
+        <div class="export-row">
+          <button id="export-all" class="export-pill" type="button"
+            title="Download the current selection (or filtered set) as GeoJSON, Shapefile (.zip), and CSV">
+            <span class="export-icon" aria-hidden="true">⬇</span> Export selection
+          </button>
+          <button id="copy-geojson" class="copy-pill" type="button"
+            title="Copy points as GeoJSON to clipboard (paste into geojson.io, ArcGIS Online, a notebook, etc.)">
+            <span class="export-icon">⧉</span> Copy GeoJSON
+          </button>
+        </div>
+        <div class="export-footnote">
+          <strong>Export</strong> saves GeoJSON + Shapefile + CSV.
+          <strong>Copy</strong> puts GeoJSON on your clipboard (points only).
         </div>
         <label class="include-footprints" id="include-footprints-row">
           <input type="checkbox" id="include-footprints" />
@@ -731,44 +896,43 @@
         </div>
       </div>
 
-      <div class="sidebar-section">
-        <div class="section-label">About</div>
-        <p style="font-size:0.78rem;line-height:1.5;color:#5a6577;">
-          Showing all EIP projects with a known location. Categories are
-          derived from the EIP # prefix and match LakeTahoeInfo's four
-          official Focus Areas. Click any point or row to view the project
-          on LakeTahoeInfo.
-        </p>
-      </div>
     </aside>
+  </calcite-shell-panel>
 
-    <!-- ── MAP ── -->
-    <div id="map-region">
-      <div id="map-view"></div>
-      <!-- Reopen tab — visible only when the list panel is hidden -->
-      <button id="panel-reopen" class="panel-reopen" hidden>PROJECTS</button>
-    </div>
+  <!-- ── MAP (default slot) ── -->
+  <div id="map-region">
+    <div id="map-view"></div>
+    <!-- Vertical side tabs — always visible. Click to collapse/expand the
+         matching Calcite Shell Panel. -->
+    <button id="sidebar-tab" class="panel-tab left" type="button"
+      aria-controls="cs-sidebar" aria-expanded="true"
+      title="Hide filters panel">FILTERS</button>
+    <button id="list-tab" class="panel-tab right" type="button"
+      aria-controls="cs-list" aria-expanded="true"
+      title="Hide projects panel">PROJECTS</button>
+  </div>
 
-    <!-- ── LIST PANEL ── -->
+  <!-- ── RIGHT PANEL (Calcite Shell handles dock layout + collapse) ── -->
+  <calcite-shell-panel slot="panel-end" id="cs-list" display-mode="dock">
     <aside id="list-panel">
       <div class="list-header">
-        <div class="panel-header-row">
-          <span class="panel-title">Projects</span>
-          <button id="panel-collapse" class="panel-collapse-btn" title="Hide panel" aria-label="Hide panel">▶</button>
-        </div>
         <input
           id="search-box"
           class="search-box"
           type="text"
           placeholder="Search by project name or EIP #"
+          aria-label="Search projects by name or EIP number"
           autocomplete="off"
         />
         <div class="selection-bar">
           <span><span class="sel-count" id="sel-count-text">0</span> selected</span>
           <div class="sel-actions">
-            <button class="pill-btn" id="sel-all-visible">Select visible</button>
-            <button class="pill-btn" id="sel-show-only" disabled>Show selected</button>
-            <button class="pill-btn" id="sel-clear" disabled>Clear</button>
+            <button class="pill-btn" id="sel-all-visible"
+              title="Add every visible row to your selection">Select visible</button>
+            <button class="pill-btn" id="sel-show-only" disabled
+              title="Show only the projects you have selected (preview your export)">Show only selected</button>
+            <button class="pill-btn" id="sel-clear" disabled
+              title="Clear all selected projects">Clear</button>
           </div>
         </div>
         <div class="selection-bar" style="margin-top:0.3rem;">
@@ -781,14 +945,47 @@
         </div>
       </div>
     </aside>
+  </calcite-shell-panel>
 
-    <!-- Reopen tab — visible only when the list panel is hidden -->
-    <button id="panel-reopen" class="panel-reopen" hidden>PROJECTS ◀</button>
+</calcite-shell>
 
+<div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<!-- Hidden host for the map-layer controls. The DOM node is shuttled into a
+     Calcite Expand on the active view (and back here on view swap) so the
+     toggle event handlers and Calcite component state are preserved. -->
+<div id="layer-controls-host" style="display:none;">
+  <div id="layer-controls" class="layer-controls-panel">
+    <div class="section-label" style="margin-bottom:0.6rem;">Map Options</div>
+
+    <label class="toggle-row" for="threed-toggle"
+      title="Switch between a flat 2D map view and a tilted 3D scene over real terrain">
+      <span id="threed-label">3D view</span>
+      <calcite-switch id="threed-toggle" scale="s" aria-labelledby="threed-label"></calcite-switch>
+    </label>
+    <div class="toggle-status" id="threed-status">
+      2D flat map
+    </div>
+
+    <label class="toggle-row" for="cluster-toggle" style="margin-top:0.7rem;"
+      title="Group nearby project points into clusters colored by dominant Focus Area">
+      <span id="cluster-label">Cluster points</span>
+      <calcite-switch id="cluster-toggle" scale="s" aria-labelledby="cluster-label"></calcite-switch>
+    </label>
+    <div class="toggle-status" id="cluster-status">
+      Each project as a pin
+    </div>
+
+    <label class="toggle-row" for="footprints-toggle" style="margin-top:0.7rem;"
+      title="Lazy-load detailed project footprints (polygons & lines, ~6.8 MB)">
+      <span id="footprints-label">Show polygons &amp; lines</span>
+      <calcite-switch id="footprints-toggle" scale="s" aria-labelledby="footprints-label"></calcite-switch>
+    </label>
+    <div class="toggle-status" id="footprints-status">
+      Polygons &amp; lines hidden
+    </div>
   </div>
 </div>
-
-<div id="toast"></div>
 
 <script>
   // ─────────────────────────────────────────────────────────────────────
@@ -829,6 +1026,7 @@
 
   const LOCAL_GEOJSON = "../data/projects.geojson";
   const LOCAL_DETAILED = "../data/detailed.geojson";
+  const LOCAL_ASPATIAL = "../data/projects_aspatial.json";
   const LIVE_REST_URL =
     "https://www.laketahoeinfo.org/WebServices/" +
     "GetProjectSimpleLocationAndGeospatialAssociations/JSON/" +
@@ -848,6 +1046,7 @@
   // ─────────────────────────────────────────────────────────────────────
   const state = {
     allFeatures: [],                 // raw point features from projects.geojson
+    aspatialRecords: [],             // basin-wide / no-location projects (CSV-only)
     detailedFeatures: [],            // polygons/lines/points from detailed.geojson (lazy)
     detailedLoaded: false,
     activeCategories: new Set(),
@@ -933,16 +1132,45 @@
     return resp.json();
   }
 
+  async function loadAspatial() {
+    // Defensive — if the file isn't there yet (older deploy), just return []
+    try {
+      const resp = await fetch(LOCAL_ASPATIAL);
+      if (!resp.ok) return [];
+      const data = await resp.json();
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.warn("Aspatial records not loaded:", err.message);
+      return [];
+    }
+  }
+
   // ─────────────────────────────────────────────────────────────────────
   // Renderers / popup templates
   // ─────────────────────────────────────────────────────────────────────
-  function pointSymbol(rgba, size = 8) {
+  // Maki-style teardrop pin (matches LakeTahoeInfo's EIP project map). The
+  // SVG is inlined as a data URI so each focus-area color is just one tiny
+  // string; ArcGIS caches the picture-marker per unique URL.
+  function rgbaToHex(rgba) {
+    return "#" + rgba.slice(0, 3)
+      .map(n => Math.round(n).toString(16).padStart(2, "0")).join("");
+  }
+  function makiPinDataUrl(hex) {
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="32" viewBox="0 0 22 32">` +
+      `<path d="M11 0 C5 0 0 4.5 0 11 C0 19.5 11 32 11 32 C11 32 22 19.5 22 11 C22 4.5 17 0 11 0 Z" ` +
+      `fill="${hex}" stroke="#FFFFFF" stroke-width="1.5"/>` +
+      `<circle cx="11" cy="11" r="4.2" fill="#FFFFFF"/>` +
+      `</svg>`;
+    return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+  }
+  function pointSymbol(rgba, size = 26) {
     return {
-      type: "simple-marker",
-      style: "circle",
-      color: rgba,
-      size: size,
-      outline: { color: [255, 255, 255, 0.9], width: 1 },
+      type: "picture-marker",
+      url: makiPinDataUrl(rgbaToHex(rgba)),
+      width: Math.round(size * 22 / 32),   // keep pin's 22:32 aspect ratio
+      height: size,
+      yoffset: size / 2,                   // anchor the tip on the point
     };
   }
 
@@ -1045,14 +1273,17 @@
       const text = escapeHtmlPopup(attrs.ProjectDescription);
       descHtml = `
         <p class="pop-desc" id="${id}">${text}</p>
-        <button class="pop-desc-toggle" data-target="${id}">Show more ↓</button>
+        <button class="pop-desc-toggle" type="button"
+          aria-controls="${id}" aria-expanded="false"
+          title="Expand the full project description"
+          data-target="${id}">Show more ↓</button>
       `;
     }
 
     // Fact grid — only include facts we have data for
     const facts = [];
     if (attrs.LeadImplementer)
-      facts.push(["Lead", escapeHtmlPopup(attrs.LeadImplementer)]);
+      facts.push(["Lead implementer", escapeHtmlPopup(attrs.LeadImplementer)]);
     if (attrs.ProjectWatershed && attrs.ProjectWatershed !== "n/a")
       facts.push(["Watershed", escapeHtmlPopup(attrs.ProjectWatershed)]);
     if (attrs.ProjectJurisdiction)
@@ -1063,7 +1294,7 @@
     const cost = formatCurrency(attrs.EstimatedTotalCost);
     if (cost) facts.push(["Est. cost", `<span class="cost">${cost}</span>`]);
     if (attrs.ProjectThresholdCategories)
-      facts.push(["Threshold", escapeHtmlPopup(attrs.ProjectThresholdCategories)]);
+      facts.push(["Threshold category", escapeHtmlPopup(attrs.ProjectThresholdCategories)]);
     if (attrs.EIPActionPriority)
       facts.push(["Action priority", escapeHtmlPopup(attrs.EIPActionPriority)]);
 
@@ -1109,6 +1340,10 @@
             if (!desc) return;
             const expanded = desc.classList.toggle("expanded");
             toggle.textContent = expanded ? "Show less ↑" : "Show more ↓";
+            toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+            toggle.title = expanded
+              ? "Collapse the description"
+              : "Expand the full project description";
           });
         }
         return wrapper;
@@ -1120,6 +1355,28 @@
   // Filter sidebar wiring
   // ─────────────────────────────────────────────────────────────────────
   function categoryOf(f) { return f.properties.Category || "Uncategorized"; }
+
+  function rgbaCss(rgba) {
+    return `rgba(${rgba[0]},${rgba[1]},${rgba[2]},${rgba[3] ?? 1})`;
+  }
+
+  // Pick a text color that meets WCAG AA contrast against the given RGB(A)
+  // background. Uses YIQ luminance; threshold 150 puts EIP Green and EIP
+  // Orange (and other light brand swatches) onto navy text.
+  function readableTextOn(rgba) {
+    const yiq = (rgba[0] * 299 + rgba[1] * 587 + rgba[2] * 114) / 1000;
+    return yiq >= 150 ? "var(--eip-navy)" : "var(--white)";
+  }
+
+  // Shorten focus-area names for pill display ("01 - Watersheds and Water Quality"
+  // → "Watersheds & WQ") so all four pills fit comfortably in the sidebar.
+  const FOCUS_AREA_SHORT = {
+    "01 - Watersheds and Water Quality":              "Watersheds & WQ",
+    "02 - Forest Health":                             "Forest Health",
+    "03 - Sustainable Recreation and Transportation": "Recreation & Transportation",
+    "04 - Science, Stewardship, and Accountability":  "Science & Stewardship",
+    "Uncategorized":                                  "Uncategorized",
+  };
 
   function buildCategoryFilters() {
     const counts = new Map();
@@ -1133,23 +1390,24 @@
     const container = document.getElementById("category-filters");
     container.innerHTML = "";
     for (const c of cats) {
-      const row = document.createElement("label");
-      row.className = "filter-row";
       const dot = CATEGORY_COLOR[c] || [154, 163, 173, 0.85];
-      const rgba = `rgba(${dot[0]},${dot[1]},${dot[2]},${dot[3] ?? 1})`;
-      row.innerHTML = `
-        <input type="checkbox" checked data-cat="${c.replace(/"/g, "&quot;")}" />
-        <span class="filter-color-dot" style="background:${rgba};"></span>
-        <span class="filter-name">${c}</span>
-        <span class="filter-count">${counts.get(c).toLocaleString()}</span>
-      `;
-      container.appendChild(row);
-      row.querySelector("input").addEventListener("change", e => {
-        const cat = e.target.getAttribute("data-cat");
-        if (e.target.checked) state.activeCategories.add(cat);
-        else state.activeCategories.delete(cat);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "filter-pill is-on";
+      btn.style.setProperty("--c", rgbaCss(dot));
+      btn.style.setProperty("--c-on-text", readableTextOn(dot));
+      btn.dataset.cat = c;
+      btn.title = `Toggle ${c} (${counts.get(c).toLocaleString()} projects)`;
+      btn.setAttribute("aria-pressed", "true");
+      btn.innerHTML = `${escapeHtml(FOCUS_AREA_SHORT[c] || c)} <span class="count">${counts.get(c).toLocaleString()}</span>`;
+      btn.addEventListener("click", () => {
+        const on = btn.classList.toggle("is-on");
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+        if (on) state.activeCategories.add(c);
+        else    state.activeCategories.delete(c);
         applyFilters();
       });
+      container.appendChild(btn);
     }
   }
 
@@ -1172,23 +1430,31 @@
     const container = document.getElementById("stage-filters");
     container.innerHTML = "";
     for (const s of stages) {
-      const row = document.createElement("label");
-      row.className = "filter-row";
       const display = s === NONE ? "Unspecified" : s;
-      const dotColor = STAGE_COLOR[s] || "#9aa3ad";
-      row.innerHTML = `
-        <input type="checkbox" checked data-stage="${escapeAttr(s)}" />
-        <span class="filter-color-dot" style="background:${dotColor};"></span>
-        <span class="filter-name">${escapeHtml(display)}</span>
-        <span class="filter-count">${counts.get(s).toLocaleString()}</span>
-      `;
-      container.appendChild(row);
-      row.querySelector("input").addEventListener("change", e => {
-        const val = e.target.getAttribute("data-stage");
-        if (e.target.checked) state.activeStages.add(val);
-        else state.activeStages.delete(val);
+      const color = STAGE_COLOR[s] || "#9aa3ad";
+      // Parse "#rrggbb" into rgba triplet for the contrast helper
+      const rgb = [
+        parseInt(color.slice(1, 3), 16),
+        parseInt(color.slice(3, 5), 16),
+        parseInt(color.slice(5, 7), 16),
+      ];
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "filter-pill is-on";
+      btn.style.setProperty("--c", color);
+      btn.style.setProperty("--c-on-text", readableTextOn(rgb));
+      btn.dataset.stage = s;
+      btn.title = `Toggle ${display} (${counts.get(s).toLocaleString()} projects)`;
+      btn.setAttribute("aria-pressed", "true");
+      btn.innerHTML = `${escapeHtml(display)} <span class="count">${counts.get(s).toLocaleString()}</span>`;
+      btn.addEventListener("click", () => {
+        const on = btn.classList.toggle("is-on");
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+        if (on) state.activeStages.add(s);
+        else    state.activeStages.delete(s);
         applyFilters();
       });
+      container.appendChild(btn);
     }
   }
 
@@ -1210,28 +1476,54 @@
       });
   }
 
-  function setupCombobox(comboboxId, propName, activeSet) {
-    const cb = document.getElementById(comboboxId);
-    cb.innerHTML = "";
+  // ─────────────────────────────────────────────────────────────────────
+  // Secondary pill filters (Program / Jurisdiction / Watershed) — same
+  // pill style as Focus Area / Stage but neutral-colored to read as
+  // secondary, and tucked inside collapsible Calcite Blocks.
+  // ─────────────────────────────────────────────────────────────────────
+  const SECONDARY_PILL_COLOR = "#5a6577";   // calm gray-navy
+
+  function setupPillFilter(containerId, propName, activeSet) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = "";
     for (const [val, count] of uniqueValues(propName)) {
-      const item = document.createElement("calcite-combobox-item");
-      item.setAttribute("value", val);
-      item.setAttribute("text-label",
-        (val === NONE ? "(unspecified)" : val) + ` · ${count.toLocaleString()}`);
-      cb.appendChild(item);
+      const display = val === NONE ? "Unspecified" : val;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "filter-pill";   // not is-on by default (whitelist semantics: empty = no filter)
+      btn.style.setProperty("--c", SECONDARY_PILL_COLOR);
+      btn.style.setProperty("--c-on-text", "var(--white)");
+      btn.dataset.value = val;
+      btn.title = `Toggle ${display} (${count.toLocaleString()} projects)`;
+      btn.setAttribute("aria-pressed", "false");
+      btn.innerHTML = `${escapeHtml(display)} <span class="count">${count.toLocaleString()}</span>`;
+      btn.addEventListener("click", () => {
+        const on = btn.classList.toggle("is-on");
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+        if (on) activeSet.add(val);
+        else    activeSet.delete(val);
+        applyFilters();
+      });
+      container.appendChild(btn);
     }
-    cb.addEventListener("calciteComboboxChange", () => {
-      activeSet.clear();
-      const items = cb.selectedItems || [];
-      for (const item of items) activeSet.add(item.getAttribute("value"));
-      applyFilters();
+  }
+
+  function setupWatershedSearch() {
+    const input = document.getElementById("watershed-search");
+    input.addEventListener("input", e => {
+      const q = e.target.value.trim().toLowerCase();
+      document.querySelectorAll("#watershed-pills .filter-pill").forEach(p => {
+        const v = (p.dataset.value || "").toLowerCase();
+        p.hidden = q && !v.includes(q);
+      });
     });
   }
 
   function buildAttributeComboboxes() {
-    setupCombobox("program-filter",      "EIPProgram",          state.activePrograms);
-    setupCombobox("jurisdiction-filter", "ProjectJurisdiction", state.activeJurisdictions);
-    setupCombobox("watershed-filter",    "ProjectWatershed",    state.activeWatersheds);
+    setupPillFilter("program-pills",      "EIPProgram",          state.activePrograms);
+    setupPillFilter("jurisdiction-pills", "ProjectJurisdiction", state.activeJurisdictions);
+    setupPillFilter("watershed-pills",    "ProjectWatershed",    state.activeWatersheds);
+    setupWatershedSearch();
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -1244,56 +1536,65 @@
   };
 
   function setupFlagPills() {
-    document.querySelectorAll(".flag-pill").forEach(btn => {
+    document.querySelectorAll(".filter-pill[data-flag]").forEach(btn => {
       const flag = btn.getAttribute("data-flag");
       const key = FLAG_STATE_KEY[flag];
       btn.addEventListener("click", () => {
         state[key] = !state[key];
         btn.classList.toggle("is-on", state[key]);
+        btn.setAttribute("aria-pressed", state[key] ? "true" : "false");
         applyFilters();
       });
     });
   }
 
-  function setupResetButton() {
-    document.getElementById("reset-filters").addEventListener("click", () => {
-      // Search
-      document.getElementById("search-box").value = "";
-      state.searchTerm = "";
+  function resetFilters() {
+    // Search
+    document.getElementById("search-box").value = "";
+    state.searchTerm = "";
 
-      // Focus Area — check everything back on
-      document.querySelectorAll('#category-filters input').forEach(el => el.checked = true);
-      state.activeCategories = new Set(
-        Array.from(document.querySelectorAll('#category-filters input'))
-          .map(el => el.getAttribute("data-cat"))
-      );
-
-      // Stage — check everything back on
-      document.querySelectorAll('#stage-filters input').forEach(el => el.checked = true);
-      state.activeStages = new Set(
-        Array.from(document.querySelectorAll('#stage-filters input'))
-          .map(el => el.getAttribute("data-stage"))
-      );
-
-      // Comboboxes — clear all selections
-      for (const id of ["program-filter", "jurisdiction-filter", "watershed-filter"]) {
-        const cb = document.getElementById(id);
-        if (cb && cb.selectedItems) {
-          for (const item of Array.from(cb.selectedItems)) item.selected = false;
-        }
-      }
-      state.activePrograms.clear();
-      state.activeJurisdictions.clear();
-      state.activeWatersheds.clear();
-
-      // Flag pills — clear all
-      state.flagEIP = false;
-      state.flagTransportation = false;
-      state.flagLakeClarity = false;
-      document.querySelectorAll(".flag-pill").forEach(b => b.classList.remove("is-on"));
-
-      applyFilters();
+    // Focus Area pills — turn all on
+    state.activeCategories.clear();
+    document.querySelectorAll('#category-filters .filter-pill').forEach(btn => {
+      btn.classList.add("is-on");
+      state.activeCategories.add(btn.dataset.cat);
     });
+
+    // Stage pills — turn all on
+    state.activeStages.clear();
+    document.querySelectorAll('#stage-filters .filter-pill').forEach(btn => {
+      btn.classList.add("is-on");
+      state.activeStages.add(btn.dataset.stage);
+    });
+
+    // Secondary pill filters — turn all off (combobox semantics: empty = no filter)
+    for (const id of ["program-pills", "jurisdiction-pills", "watershed-pills"]) {
+      document.querySelectorAll(`#${id} .filter-pill.is-on`).forEach(btn => {
+        btn.classList.remove("is-on");
+        btn.setAttribute("aria-pressed", "false");
+      });
+    }
+    state.activePrograms.clear();
+    state.activeJurisdictions.clear();
+    state.activeWatersheds.clear();
+    // Also clear the watershed search input
+    const ws = document.getElementById("watershed-search");
+    if (ws) {
+      ws.value = "";
+      document.querySelectorAll("#watershed-pills .filter-pill").forEach(p => p.hidden = false);
+    }
+
+    // Flag pills — turn all off
+    state.flagEIP = false;
+    state.flagTransportation = false;
+    state.flagLakeClarity = false;
+    document.querySelectorAll(".filter-pill[data-flag]").forEach(b => b.classList.remove("is-on"));
+
+    applyFilters();
+  }
+
+  function setupResetButton() {
+    document.getElementById("reset-filters").addEventListener("click", resetFilters);
   }
 
   function setupSearch() {
@@ -1306,10 +1607,10 @@
   // ─────────────────────────────────────────────────────────────────────
   // Filtering
   // ─────────────────────────────────────────────────────────────────────
-  function passesFilters(f) {
-    const p = f.properties;
+  function passesFiltersOnProps(p) {
     // Focus Area (checkbox semantics — must be in active set)
-    if (!state.activeCategories.has(categoryOf(f))) return false;
+    const cat = p.Category || "Uncategorized";
+    if (!state.activeCategories.has(cat)) return false;
     // Stage (checkbox semantics)
     if (!state.activeStages.has(dimVal(p.Stage))) return false;
     // Program / Jurisdiction / Watershed (combobox semantics — empty = no filter)
@@ -1322,11 +1623,12 @@
     if (state.flagLakeClarity    && !p.IsLakeClarityProject)    return false;
     // Search
     if (state.searchTerm) {
-      const hay = (p.ProjectName + " " + p.EIPProjectNumber).toLowerCase();
+      const hay = ((p.ProjectName || "") + " " + (p.EIPProjectNumber || "")).toLowerCase();
       if (!hay.includes(state.searchTerm)) return false;
     }
     return true;
   }
+  function passesFilters(f) { return passesFiltersOnProps(f.properties); }
 
   function escSql(s) { return String(s).replace(/'/g, "''"); }
 
@@ -1418,7 +1720,7 @@
     if (n === 0 && state.showSelectedOnly) {
       state.showSelectedOnly = false;
       document.getElementById("sel-show-only").classList.remove("is-on");
-      document.getElementById("sel-show-only").textContent = "Show selected";
+      document.getElementById("sel-show-only").textContent = "Show only selected";
       applyFilters();
     }
 
@@ -1435,21 +1737,41 @@
     }
   }
 
+  // When the user has no explicit selection, include aspatial records
+  // (basin-wide / no-location projects) that match the active filters.
+  // CSV is the only format that uses these — GeoJSON / Shapefile need geometry.
+  function exportTargetAspatial() {
+    if (state.selection.size > 0) return [];     // selection mode is point-specific
+    return state.aspatialRecords.filter(passesFiltersOnProps);
+  }
+
   function refreshExportTargetText() {
     const target = exportTargetFeatures();
+    const aspatial = exportTargetAspatial();
+    const el = document.getElementById("export-target-text");
+    if (!target.length && !aspatial.length) {
+      el.textContent = "Select projects or adjust filters to enable export";
+      return;
+    }
+    const parts = [];
+    if (target.length) {
+      const verb = state.selection.size > 0 ? "selected" : "in view";
+      parts.push(`${target.length.toLocaleString()} ${verb} point` +
+                 (target.length === 1 ? "" : "s"));
+    }
+    if (aspatial.length) {
+      parts.push(`${aspatial.length.toLocaleString()} basin-wide record` +
+                 (aspatial.length === 1 ? "" : "s") + " (CSV only)");
+    }
     const incFootprint = document.getElementById("include-footprints").checked;
-    let extra = "";
-    if (incFootprint && state.detailedLoaded) {
+    if (incFootprint && state.detailedLoaded && target.length) {
       const ids = new Set(target.map(f => f.properties.EIPProjectNumber));
       const matching = state.detailedFeatures.filter(f =>
         ids.has(f.properties.EIPProjectNumber));
-      extra = ` + ${matching.length.toLocaleString()} footprint`;
-      if (matching.length !== 1) extra += "s";
+      parts.push(`${matching.length.toLocaleString()} footprint` +
+                 (matching.length === 1 ? "" : "s"));
     }
-    const verb = state.selection.size > 0 ? "selected" : "filtered";
-    document.getElementById("export-target-text").textContent =
-      `Will export ${target.length.toLocaleString()} ${verb} point` +
-      (target.length === 1 ? "" : "s") + extra;
+    el.textContent = "Exporting " + parts.join(" + ");
   }
 
   function exportTargetFeatures() {
@@ -1518,13 +1840,21 @@
       row.dataset.eip = eip;
       if (state.selection.has(eip)) row.classList.add("active");
 
+      // Keyboard accessibility — row acts like a button (Enter/Space → zoom to feature)
+      row.setAttribute("role", "button");
+      row.setAttribute("tabindex", "0");
+      row.setAttribute("aria-label",
+        `Zoom to ${f.properties.ProjectName}, EIP ${eip}`);
+
       const cat = categoryOf(f);
       const dot = CATEGORY_COLOR[cat] || [154, 163, 173, 0.85];
       const rgba = `rgba(${dot[0]},${dot[1]},${dot[2]},${dot[3] ?? 1})`;
       const checked = state.selection.has(eip) ? "checked" : "";
 
       row.innerHTML = `
-        <input type="checkbox" class="row-checkbox" data-eip="${escapeAttr(eip)}" ${checked} />
+        <input type="checkbox" class="row-checkbox" data-eip="${escapeAttr(eip)}"
+          aria-label="Add ${escapeAttr(f.properties.ProjectName)} to selection"
+          ${checked} />
         <div class="row-content">
           <div class="name">${escapeHtml(f.properties.ProjectName)}</div>
           <div class="meta">
@@ -1536,10 +1866,17 @@
 
       const cb = row.querySelector(".row-checkbox");
       cb.addEventListener("click", e => e.stopPropagation());
+      cb.addEventListener("keydown", e => e.stopPropagation());  // don't trigger row's keydown
       cb.addEventListener("change", e => {
         toggleSelection(eip, e.target.checked);
       });
       row.addEventListener("click", () => zoomToFeature(f));
+      row.addEventListener("keydown", e => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          zoomToFeature(f);
+        }
+      });
       frag.appendChild(row);
     }
     scroll.appendChild(frag);
@@ -1562,6 +1899,7 @@
     require([
       "esri/Map",
       "esri/views/MapView",
+      "esri/views/SceneView",
       "esri/layers/GeoJSONLayer",
       "esri/layers/FeatureLayer",
       "esri/widgets/Home",
@@ -1569,7 +1907,9 @@
       "esri/widgets/Legend",
       "esri/widgets/Print",
       "esri/widgets/Expand",
-    ], (Map, MapView, GeoJSONLayer, FeatureLayer, Home, ScaleBar, Legend, Print, Expand) => {
+      "esri/widgets/Fullscreen",
+      "esri/widgets/BasemapToggle",
+    ], (Map, MapView, SceneView, GeoJSONLayer, FeatureLayer, Home, ScaleBar, Legend, Print, Expand, Fullscreen, BasemapToggle) => {
 
       // TRPA agency boundary — drawn first, beneath everything
       const boundary = new FeatureLayer({
@@ -1578,6 +1918,9 @@
         listMode: "hide",                      // keep out of Legend
         legendEnabled: false,
         popupEnabled: false,
+        // In 3D the polygon must drape on the elevation surface — without
+        // this it renders at sea level (~6,200 ft below the basin floor).
+        elevationInfo: { mode: "on-the-ground" },
         renderer: {
           type: "simple",
           symbol: {
@@ -1595,59 +1938,211 @@
         popupTemplate: buildPopupTemplate(),
         outFields: ["*"],
         copyright: "LakeTahoeInfo.org",
+        // Drape pins on terrain in 3D so they sit on the ground, not at sea level
+        elevationInfo: { mode: "on-the-ground" },
       });
       state.pointsLayer = layer;
       state.boundaryLayer = boundary;
 
       const map = new Map({
         basemap: "gray-vector",                // Esri Light Gray Canvas (free, anonymous)
+        ground: "world-elevation",             // 3D terrain — only rendered by SceneView
         layers: [boundary, layer],
       });
 
-      const view = new MapView({
+      // Extent of the Tahoe Basin (covers Truckee → Meyers, west shore → Carson Valley fringe)
+      // — fits whole basin regardless of viewport aspect ratio / panel state
+      const BASIN_EXTENT = {
+        xmin: -120.30, ymin: 38.83,
+        xmax: -119.85, ymax: 39.32,
+        spatialReference: { wkid: 4326 },
+      };
+
+      const mapView = new MapView({
         container: "map-view",
         map: map,
-        center: [-120.04, 39.09],
-        zoom: 9,
+        extent: BASIN_EXTENT,
         constraints: { minZoom: 7, maxZoom: 19 },
       });
-      state.view = view;
+      // expose for resetApp's goTo target
+      state._basinExtent = BASIN_EXTENT;
+      // SceneView attached lazily on first toggle (saves init cost in 2D-default)
+      let sceneView = null;
 
-      view.ui.add(new Home({ view }), "top-left");
-      view.ui.add(new ScaleBar({ view, unit: "imperial" }), "bottom-left");
+      // ──────────────────────────────────────────────────────────────────
+      // 3D INITIAL CAMERA — TWEAK THESE in VS Code to taste.
+      //   longitude / latitude : where the camera is anchored on the ground
+      //                          (south of the basin, looking north)
+      //   z                     : altitude above sea level, METERS
+      //                          (higher = more zoomed out)
+      //   tilt  (0 → 90)        : 0 = looking straight down, 90 = horizontal.
+      //                          Shallow / oblique = HIGH value (e.g. 70-80).
+      //   heading (0 → 360)     : 0 = camera faces NORTH, 90 = east, etc.
+      // ──────────────────────────────────────────────────────────────────
+      const SCENE_INITIAL_CAMERA = {
+        position: { longitude: -120.04, latitude: 38.55, z: 18000 },
+        heading: 0,      // look north
+        tilt: 72,        // shallow oblique — see far across the basin
+      };
 
-      const legendExpand = new Expand({
-        view,
-        content: new Legend({ view }),
-        expanded: false,
-        expandIcon: "legend",
-        expandTooltip: "Legend",
-        collapseTooltip: "Collapse legend",
-      });
-      view.ui.add(legendExpand, "top-right");
+      function makeSceneView() {
+        return new SceneView({
+          container: null,
+          map: map,
+          camera: SCENE_INITIAL_CAMERA,
+          environment: { atmosphereEnabled: true, lighting: { type: "sun" } },
+        });
+      }
 
-      const printExpand = new Expand({
-        view,
-        content: new Print({
+      // Attach widgets to whichever view is active. Widgets get rebuilt on swap.
+      function attachWidgets(view) {
+        // Track widgets so we can detach + destroy on swap.
+        view._eipWidgets = [];
+
+        const home = new Home({ view });
+        view.ui.add(home, "top-left");
+        view._eipWidgets.push(home);
+
+        const fs = new Fullscreen({ view });
+        view.ui.add(fs, "top-left");
+        view._eipWidgets.push(fs);
+
+        // Calcite reset action (clears filters/selection/popup, recenters)
+        const resetAction = document.createElement("calcite-action");
+        resetAction.setAttribute("icon", "reset");
+        resetAction.setAttribute("text", "Reset app");
+        resetAction.setAttribute("title", "Reset app to default state");
+        resetAction.setAttribute("scale", "s");
+        resetAction.style.background = "var(--white)";
+        resetAction.addEventListener("click", resetApp);
+        view.ui.add(resetAction, "top-left");
+        view._eipWidgets.push(resetAction);
+
+        const scale = new ScaleBar({ view, unit: "imperial" });
+        view.ui.add(scale, "bottom-left");
+        view._eipWidgets.push(scale);
+
+        // Basemap toggle — alternates between the per-view default basemap
+        // and its complement (so 2D gray ⇄ hybrid, 3D hybrid ⇄ topo).
+        const altBasemap = view.type === "3d" ? "topo-vector" : "hybrid";
+        const basemapToggle = new BasemapToggle({
           view,
-          printServiceUrl: PRINT_SERVICE_URL,
-        }),
-        expanded: false,
-        expandIcon: "print",
-        expandTooltip: "Print / export map",
-        collapseTooltip: "Close print",
-      });
-      view.ui.add(printExpand, "top-right");
+          nextBasemap: altBasemap,
+        });
+        view.ui.add(basemapToggle, "bottom-right");
+        view._eipWidgets.push(basemapToggle);
 
-      view.whenLayerView(layer).then(lv => {
+        const legendExpand = new Expand({
+          view,
+          content: new Legend({ view }),
+          expanded: false,
+          expandIcon: "legend",
+          expandTooltip: "Legend",
+          collapseTooltip: "Collapse legend",
+        });
+        view.ui.add(legendExpand, "top-right");
+        view._eipWidgets.push(legendExpand);
+
+        const printExpand = new Expand({
+          view,
+          content: new Print({ view, printServiceUrl: PRINT_SERVICE_URL }),
+          expanded: false,
+          expandIcon: "print",
+          expandTooltip: "Print / export map",
+          collapseTooltip: "Close print",
+        });
+        view.ui.add(printExpand, "top-right");
+        view._eipWidgets.push(printExpand);
+
+        // Map Options Expand (top-right, alongside Legend & Print). Pulls
+        // the hidden #layer-controls node into its panel; we rescue it back
+        // to its host on detach so toggle state and event handlers survive.
+        const layerControls = document.getElementById("layer-controls");
+        const layerExpand = new Expand({
+          view,
+          content: layerControls,
+          expanded: false,
+          expandIcon: "sliders-horizontal",
+          expandTooltip: "Map options",
+          collapseTooltip: "Close map options",
+        });
+        view.ui.add(layerExpand, "top-right");
+        view._eipWidgets.push(layerExpand);
+        view._layerExpand = layerExpand;
+      }
+
+      function detachWidgets(view) {
+        if (!view._eipWidgets) return;
+        // Rescue the shared #layer-controls node back to its host so that
+        // its child toggles (and their state + listeners) survive the next
+        // Expand re-attach.
+        const layerHost = document.getElementById("layer-controls-host");
+        const layerControls = document.getElementById("layer-controls");
+        if (layerHost && layerControls && layerControls.parentNode !== layerHost) {
+          layerHost.appendChild(layerControls);
+        }
+        for (const w of view._eipWidgets) {
+          try { view.ui.remove(w); } catch (e) {}
+          if (w && typeof w.destroy === "function") {
+            try { w.destroy(); } catch (e) {}
+          }
+        }
+        view._eipWidgets = [];
+      }
+
+      function bindViewEvents(view) {
+        view.watch("stationary", stationary => {
+          if (stationary && view.extent) updateExtentAndRender(view);
+        });
+        view.when(() => updateExtentAndRender(view));
+      }
+
+      async function activateView(view) {
+        // ─── DEFAULT BASEMAP PER VIEW (tweak in VS Code) ───────────────
+        //   3D: "hybrid"      — aerial imagery + reference labels (drapes
+        //                       over the elevation surface)
+        //   2D: "gray-vector" — Esri Light Gray Canvas (clean thematic bg)
+        // The BasemapToggle widget swaps to whichever isn't the default.
+        // ───────────────────────────────────────────────────────────────
+        map.basemap = view.type === "3d" ? "hybrid" : "gray-vector";
+
+        // Detach widgets from old view, attach to new
+        if (state.view) {
+          detachWidgets(state.view);
+          state.view.container = null;
+        }
+        view.container = "map-view";
+        attachWidgets(view);
+        bindViewEvents(view);
+        state.view = view;
+
+        // Re-acquire layerViews for filtering on the new view
+        try {
+          state.pointsLayerView = await view.whenLayerView(state.pointsLayer);
+          if (state.detailedLayer) {
+            state.detailedLayerView = await view.whenLayerView(state.detailedLayer);
+          }
+          applyFilters();
+        } catch (err) {
+          console.error("Layer view binding failed:", err);
+        }
+      }
+
+      // Expose to the 3D toggle handler (declared further down in init)
+      state._activate2D = () => activateView(mapView);
+      state._activate3D = () => {
+        if (!sceneView) sceneView = makeSceneView();
+        return activateView(sceneView);
+      };
+
+      // Initial activation = 2D
+      attachWidgets(mapView);
+      bindViewEvents(mapView);
+      state.view = mapView;
+      mapView.whenLayerView(layer).then(lv => {
         state.pointsLayerView = lv;
         applyFilters();
       });
-
-      view.watch("stationary", stationary => {
-        if (stationary && view.extent) updateExtentAndRender(view);
-      });
-      view.when(() => updateExtentAndRender(view));
     });
   }
 
@@ -1688,7 +2183,7 @@
   async function ensureDetailedLoaded() {
     if (state.detailedLoaded) return;
     document.getElementById("footprints-status").textContent =
-      "Loading footprints… (~6.8 MB)";
+      "Loading footprints…";
     const fc = await loadDetailed();
 
     // Enrich each detailed feature with Category derived from EIP # so
@@ -1705,7 +2200,7 @@
     state.detailedFeatures = fc.features;
     state.detailedLoaded = true;
     document.getElementById("footprints-status").textContent =
-      `${fc.features.length.toLocaleString()} footprints loaded`;
+      `${fc.features.length.toLocaleString()} footprints on map`;
     document.getElementById("include-footprints-row").removeAttribute("disabled");
     refreshExportTargetText();
 
@@ -1717,6 +2212,8 @@
         popupTemplate: buildPopupTemplate(),
         outFields: ["*"],
         copyright: "LakeTahoeInfo.org",
+        // Drape polygons & lines on terrain in 3D
+        elevationInfo: { mode: "on-the-ground" },
       });
       state.detailedLayer = layer;
       // Insert above the TRPA boundary but below the points (so labels/dots stay on top)
@@ -1736,7 +2233,7 @@
     if (on) {
       ensureDetailedLoaded().catch(err => {
         console.error(err);
-        toast("Failed to load footprints", "error");
+        toast("Couldn't load footprints — check your connection", "error");
         document.getElementById("footprints-toggle").checked = false;
       });
     }
@@ -1744,6 +2241,16 @@
     document.getElementById("include-footprints-row")
       .toggleAttribute("disabled", !on || !state.detailedLoaded);
     if (!on) document.getElementById("include-footprints").checked = false;
+
+    // Keep the status line in sync with both visibility and loaded state
+    const status = document.getElementById("footprints-status");
+    if (on && state.detailedLoaded) {
+      status.textContent = `${state.detailedFeatures.length.toLocaleString()} footprints on map`;
+    } else if (!on && state.detailedLoaded) {
+      status.textContent = `${state.detailedFeatures.length.toLocaleString()} footprints hidden`;
+    } else if (!on) {
+      status.textContent = "Polygons & lines hidden";
+    }
     refreshExportTargetText();
   }
 
@@ -1785,7 +2292,7 @@
   function exportGeoJSON() {
     const fc = buildExportFC();
     if (!fc.features.length) {
-      toast("Nothing to export", "error");
+      toast("Select projects or adjust filters first", "error");
       return;
     }
     const blob = new Blob([JSON.stringify(fc, null, 2)], { type: "application/geo+json" });
@@ -1795,7 +2302,11 @@
 
   function exportCSV() {
     const features = exportTargetFeatures();
-    if (!features.length) { toast("Nothing to export", "error"); return; }
+    const aspatial = exportTargetAspatial();
+    if (!features.length && !aspatial.length) {
+      toast("Select projects or adjust filters first", "error");
+      return;
+    }
     // Property name → CSV column header (controls order). Includes every
     // field shown in the popup plus identity, region/state, flags, and lat/lon.
     const cols = [
@@ -1834,6 +2345,7 @@
       return s;
     };
     const lines = [cols.map(c => c[1]).join(",")];
+    // Spatial rows (with lat/lon)
     for (const f of features) {
       const p = f.properties;
       const [lon, lat] = f.geometry.coordinates;
@@ -1844,10 +2356,22 @@
       }).map(escape);
       lines.push(row.join(","));
     }
+    // Aspatial rows (basin-wide / no-location projects — empty lat/lon)
+    for (const p of aspatial) {
+      const row = cols.map(([key]) => {
+        if (key === "__lat__" || key === "__lon__") return "";
+        return p[key];
+      }).map(escape);
+      lines.push(row.join(","));
+    }
     const blob = new Blob(["\ufeff" + lines.join("\r\n")],
                           { type: "text/csv;charset=utf-8" });
     downloadBlob(blob, `eip_projects_${timestamp()}.csv`);
-    toast(`Exported ${features.length.toLocaleString()} rows`);
+    const total = features.length + aspatial.length;
+    const breakdown = aspatial.length
+      ? ` (${features.length.toLocaleString()} mapped + ${aspatial.length.toLocaleString()} basin-wide)`
+      : "";
+    toast(`Exported ${total.toLocaleString()} rows${breakdown}`);
   }
 
   // Load shp-write on demand. We mask Dojo's AMD `define` while the script
@@ -1880,7 +2404,7 @@
 
   async function exportShapefile() {
     const fc = buildExportFC();
-    if (!fc.features.length) { toast("Nothing to export", "error"); return; }
+    if (!fc.features.length) { toast("Select projects or adjust filters first", "error"); return; }
 
     try {
       await ensureShpWrite();
@@ -1907,10 +2431,60 @@
     }
   }
 
+  async function exportAll() {
+    const fc = buildExportFC();
+    if (!fc.features.length) { toast("Select projects or adjust filters first", "error"); return; }
+
+    const btn = document.getElementById("export-all");
+    btn.disabled = true;
+    const origLabel = btn.innerHTML;
+    btn.innerHTML = '<span class="export-icon">⬇</span> Preparing…';
+
+    try {
+      // Trigger downloads in sequence with a small gap between the synchronous
+      // ones so browsers don't merge or drop them.
+      exportGeoJSON();
+      await new Promise(r => setTimeout(r, 200));
+      exportCSV();
+      // exportShapefile is async (loads shp-write on demand)
+      await exportShapefile();
+      toast(`Exported ${fc.features.length.toLocaleString()} projects · 3 files`);
+    } catch (err) {
+      console.error(err);
+      toast("Export failed — check console", "error");
+    } finally {
+      btn.innerHTML = origLabel;
+      btn.disabled = false;
+    }
+  }
+
+  async function copyGeoJSON() {
+    // Points only — never include the detailed footprint geometry, which
+    // would inflate the clipboard payload (often into multiple MB) and
+    // serves no purpose when pasting into geojson.io / ArcGIS Online / etc.
+    const points = exportTargetFeatures();
+    if (!points.length) { toast("Select projects or adjust filters first", "error"); return; }
+    const fc = { type: "FeatureCollection", features: points };
+    const text = JSON.stringify(fc);
+
+    if (!navigator.clipboard || !navigator.clipboard.writeText) {
+      toast("Clipboard API unavailable", "error");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      const kb = (text.length / 1024).toFixed(text.length > 1024*100 ? 0 : 1);
+      toast(`Copied ${points.length.toLocaleString()} points to clipboard · ${kb} KB`);
+    } catch (err) {
+      console.error(err);
+      toast("Couldn't copy — too many features for the clipboard. Try Export instead.", "error");
+    }
+  }
+
   function setupExportButtons() {
-    document.getElementById("export-geojson").addEventListener("click", exportGeoJSON);
-    document.getElementById("export-csv").addEventListener("click", exportCSV);
-    document.getElementById("export-shapefile").addEventListener("click", exportShapefile);
+    document.getElementById("export-all").addEventListener("click", exportAll);
+    document.getElementById("copy-geojson").addEventListener("click", copyGeoJSON);
     document.getElementById("include-footprints").addEventListener("change",
       refreshExportTargetText);
   }
@@ -1920,26 +2494,184 @@
     document.getElementById("sel-clear").addEventListener("click", clearSelection);
 
     const showOnly = document.getElementById("sel-show-only");
+    showOnly.setAttribute("aria-pressed", "false");
     showOnly.addEventListener("click", () => {
       if (showOnly.disabled) return;
       state.showSelectedOnly = !state.showSelectedOnly;
       showOnly.classList.toggle("is-on", state.showSelectedOnly);
-      showOnly.textContent = state.showSelectedOnly ? "Show all" : "Show selected";
+      showOnly.textContent = state.showSelectedOnly ? "Show all matches" : "Show only selected";
+      showOnly.setAttribute("aria-pressed", state.showSelectedOnly ? "true" : "false");
+      showOnly.title = state.showSelectedOnly
+        ? "Return to showing all filtered projects"
+        : "Show only the projects you have selected (preview your export)";
       applyFilters();
     });
   }
 
   function setupPanelCollapse() {
-    const body = document.getElementById("app-body");
-    const collapseBtn = document.getElementById("panel-collapse");
-    const reopenBtn = document.getElementById("panel-reopen");
+    const csSidebar = document.getElementById("cs-sidebar");
+    const csList    = document.getElementById("cs-list");
+    const sidebarTab = document.getElementById("sidebar-tab");
+    const listTab    = document.getElementById("list-tab");
 
-    function setCollapsed(yes) {
-      body.classList.toggle("list-collapsed", yes);
-      reopenBtn.hidden = !yes;
+    function setSidebarCollapsed(yes) {
+      csSidebar.collapsed = yes;
+      sidebarTab.setAttribute("aria-expanded", yes ? "false" : "true");
+      sidebarTab.title = yes ? "Show filters panel" : "Hide filters panel";
     }
-    collapseBtn.addEventListener("click", () => setCollapsed(true));
-    reopenBtn.addEventListener("click", () => setCollapsed(false));
+    function setListCollapsed(yes) {
+      csList.collapsed = yes;
+      listTab.setAttribute("aria-expanded", yes ? "false" : "true");
+      listTab.title = yes ? "Show projects panel" : "Hide projects panel";
+    }
+
+    sidebarTab.addEventListener("click", () => setSidebarCollapsed(!csSidebar.collapsed));
+    listTab.addEventListener("click",    () => setListCollapsed(!csList.collapsed));
+
+    // expose for resetApp
+    setupPanelCollapse._setListCollapsed = setListCollapsed;
+    setupPanelCollapse._setSidebarCollapsed = setSidebarCollapsed;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Clustering — toggle, with EIP focus-area-colored cluster symbols
+  // ─────────────────────────────────────────────────────────────────────
+  function buildClusterConfig() {
+    // Color clusters by their dominant Focus Area, with size scaling by count.
+    // GeoJSONLayer.featureReduction supports a "cluster" type out of the box.
+    return {
+      type: "cluster",
+      clusterRadius: "80px",
+      clusterMinSize: "22px",
+      clusterMaxSize: "60px",
+      // Drive cluster color by which Focus Area appears most in the cluster
+      fields: [{
+        name: "dominant_category",
+        statisticType: "mode",
+        onStatisticField: "Category",
+      }],
+      renderer: {
+        type: "unique-value",
+        field: "dominant_category",
+        defaultSymbol: {
+          type: "simple-marker",
+          style: "circle",
+          color: rgbaCss(CATEGORY_COLOR["Uncategorized"]),
+          outline: { color: [255,255,255,0.95], width: 2 },
+        },
+        defaultLabel: "Uncategorized",
+        uniqueValueInfos: FOCUS_AREA_ORDER
+          .filter(c => c !== "Uncategorized")
+          .map(c => ({
+            value: c,
+            label: c,
+            symbol: {
+              type: "simple-marker",
+              style: "circle",
+              color: rgbaCss(CATEGORY_COLOR[c]),
+              outline: { color: [255,255,255,0.95], width: 2 },
+            },
+          })),
+      },
+      labelingInfo: [{
+        deconflictionStrategy: "none",
+        labelExpressionInfo: { expression: "Text($feature.cluster_count, '#,###')" },
+        symbol: {
+          type: "text",
+          color: "white",
+          font: { family: "Lexend Deca, sans-serif", size: "11px", weight: "bold" },
+        },
+        labelPlacement: "center-center",
+      }],
+      popupTemplate: {
+        title: "{cluster_count} projects in this area",
+        content: "Most: <strong>{dominant_category}</strong>",
+      },
+    };
+  }
+
+  function setClusterEnabled(on) {
+    if (!state.pointsLayer) return;
+    state.pointsLayer.featureReduction = on ? buildClusterConfig() : null;
+    document.getElementById("cluster-status").textContent =
+      on ? "Clusters colored by dominant Focus Area" : "Each project as a pin";
+  }
+
+  function setupClusterToggle() {
+    const sw = document.getElementById("cluster-toggle");
+    sw.addEventListener("calciteSwitchChange", e => {
+      setClusterEnabled(e.target.checked);
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // 2D ⇄ 3D toggle (MapView ⇄ SceneView, sharing the same Map)
+  // ─────────────────────────────────────────────────────────────────────
+  function setup3DToggle() {
+    const sw = document.getElementById("threed-toggle");
+    const status = document.getElementById("threed-status");
+    sw.addEventListener("calciteSwitchChange", async e => {
+      const on = e.target.checked;
+      status.textContent = on ? "Loading 3D…" : "2D flat map";
+      try {
+        if (on) await state._activate3D();
+        else    await state._activate2D();
+        status.textContent = on
+          ? "3D scene · right-drag to tilt, scroll to zoom"
+          : "2D flat map";
+      } catch (err) {
+        console.error(err);
+        toast("Couldn't switch view", "error");
+        // Roll back the switch
+        sw.checked = !on;
+        status.textContent = on ? "2D flat map" : "3D scene";
+      }
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Reset entire app (called from the map's Calcite reset action)
+  // ─────────────────────────────────────────────────────────────────────
+  function resetApp() {
+    resetFilters();
+    state.selection.clear();
+    refreshSelectionUI();
+    if (state.showSelectedOnly) {
+      state.showSelectedOnly = false;
+      const btn = document.getElementById("sel-show-only");
+      btn.classList.remove("is-on");
+      btn.textContent = "Show only selected";
+      applyFilters();
+    }
+    // Footprints off
+    const ftSw = document.getElementById("footprints-toggle");
+    if (ftSw && ftSw.checked) ftSw.checked = false;
+    setFootprintsVisible(false);
+    document.getElementById("footprints-status").textContent = state.detailedLoaded
+      ? `${state.detailedFeatures.length.toLocaleString()} footprints hidden`
+      : "Polygons & lines hidden";
+    // Cluster off
+    const clSw = document.getElementById("cluster-toggle");
+    if (clSw && clSw.checked) clSw.checked = false;
+    setClusterEnabled(false);
+    // Back to 2D
+    const tdSw = document.getElementById("threed-toggle");
+    if (tdSw && tdSw.checked) {
+      tdSw.checked = false;
+      document.getElementById("threed-status").textContent = "2D flat map";
+      if (state._activate2D) state._activate2D();
+    }
+    // Reopen both panels if hidden
+    if (setupPanelCollapse._setListCollapsed)    setupPanelCollapse._setListCollapsed(false);
+    if (setupPanelCollapse._setSidebarCollapsed) setupPanelCollapse._setSidebarCollapsed(false);
+    // Recenter the map and close any popup
+    if (state.view) {
+      state.view.closePopup();
+      // Re-fit to the whole basin (works in both 2D and 3D)
+      const target = state._basinExtent || { center: [-120.04, 39.09], zoom: 9 };
+      state.view.goTo(target, { duration: 400 });
+    }
+    toast("Reset to defaults");
   }
 
   function setupFootprintsToggle() {
@@ -1975,7 +2707,10 @@
   async function init() {
     setStatus("snapshot", "Loading snapshot…");
     try {
-      const local = await loadLocalSnapshot();
+      const [local, aspatial] = await Promise.all([
+        loadLocalSnapshot(),
+        loadAspatial(),
+      ]);
       // ensure derived Category is present (snapshot was built with it,
       // but re-derive defensively in case the live refresh path ran first)
       for (const f of local.features) {
@@ -1983,7 +2718,11 @@
           f.properties.Category = focusAreaFromEIP(f.properties.EIPProjectNumber);
         }
       }
+      for (const r of aspatial) {
+        if (!r.Category) r.Category = focusAreaFromEIP(r.EIPProjectNumber);
+      }
       state.allFeatures = local.features;
+      state.aspatialRecords = aspatial;
 
       buildCategoryFilters();
       buildStageFilters();
@@ -1994,6 +2733,8 @@
       setupSelectionButtons();
       setupExportButtons();
       setupFootprintsToggle();
+      setupClusterToggle();
+      setup3DToggle();
       setupPanelCollapse();
       buildMap(local);
       refreshSelectionUI();
