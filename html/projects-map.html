@@ -1699,6 +1699,7 @@
 
   function clearSelection() {
     state.selection.clear();
+    if (state.pointsLayer) state.pointsLayer.labelsVisible = false;
     refreshSelectionUI();
     renderList();
   }
@@ -1943,6 +1944,25 @@
         // them at terrain elevation while keeping the symbol facing the
         // camera. (on-the-ground would rasterize them flat onto the surface.)
         elevationInfo: { mode: "relative-to-ground", offset: 0 },
+        // EIP # labels — hidden by default, flipped on when "Show only
+        // selected" engages so prints / shares show only the picks
+        // clearly tagged. Navy text + white halo reads on any basemap.
+        labelingInfo: [{
+          labelExpressionInfo: { expression: "$feature.EIPProjectNumber" },
+          symbol: {
+            type: "text",
+            color: [11, 31, 65, 1],
+            haloColor: [255, 255, 255, 0.95],
+            haloSize: 1.5,
+            font: {
+              family: "Lexend Deca, system-ui, sans-serif",
+              size: 9,
+              weight: "bold",
+            },
+          },
+          labelPlacement: "above-center",
+        }],
+        labelsVisible: false,
       });
       state.pointsLayer = layer;
       state.boundaryLayer = boundary;
@@ -1983,7 +2003,7 @@
       //   heading (0 → 360)     : 0 = camera faces NORTH, 90 = east, etc.
       // ──────────────────────────────────────────────────────────────────
       const SCENE_INITIAL_CAMERA = {
-        position: { longitude: -120.04, latitude: 38.55, z: 18000 },
+        position: { longitude: -120.04, latitude: 38.55, z: 27000 },
         heading: 0,      // look north
         tilt: 72,        // shallow oblique — see far across the basin
       };
@@ -2524,6 +2544,9 @@
       showOnly.title = state.showSelectedOnly
         ? "Return to showing all filtered projects"
         : "Show only the projects you have selected (preview your export)";
+      // EIP # labels follow the selection-only mode — they're cluttered
+      // at full extent but valuable for shares/prints of the picks.
+      if (state.pointsLayer) state.pointsLayer.labelsVisible = state.showSelectedOnly;
       applyFilters();
     });
   }
@@ -2655,6 +2678,7 @@
   function resetApp() {
     resetFilters();
     state.selection.clear();
+    if (state.pointsLayer) state.pointsLayer.labelsVisible = false;
     refreshSelectionUI();
     if (state.showSelectedOnly) {
       state.showSelectedOnly = false;
