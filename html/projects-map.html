@@ -1976,8 +1976,8 @@
       // Extent of the Tahoe Basin (covers Truckee → Meyers, west shore → Carson Valley fringe)
       // — fits whole basin regardless of viewport aspect ratio / panel state
       const BASIN_EXTENT = {
-        xmin: -120.30, ymin: 38.83,
-        xmax: -119.85, ymax: 39.32,
+        xmin: -120.30, ymin: 38.9,
+        xmax: -119.85, ymax: 39.1,
         spatialReference: { wkid: 4326 },
       };
 
@@ -2003,9 +2003,9 @@
       //   heading (0 → 360)     : 0 = camera faces NORTH, 90 = east, etc.
       // ──────────────────────────────────────────────────────────────────
       const SCENE_INITIAL_CAMERA = {
-        position: { longitude: -120.04, latitude: 38.55, z: 27000 },
+        position: { longitude: -120.04, latitude: 38.35, z: 40000 },
         heading: 0,      // look north
-        tilt: 72,        // shallow oblique — see far across the basin
+        tilt: 67,        // shallow oblique — see far across the basin
       };
 
       function makeSceneView() {
