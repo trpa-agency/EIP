@@ -2288,6 +2288,7 @@
         view._eipWidgets.push(fs);
 
         // Calcite reset action (clears filters/selection/popup, recenters)
+        // — anchored bottom-left of the map for both MapView and SceneView
         const resetAction = document.createElement("calcite-action");
         resetAction.setAttribute("icon", "reset");
         resetAction.setAttribute("text", "Reset app");
@@ -2295,7 +2296,7 @@
         resetAction.setAttribute("scale", "s");
         resetAction.style.background = "var(--white)";
         resetAction.addEventListener("click", resetApp);
-        view.ui.add(resetAction, "top-left");
+        view.ui.add(resetAction, "bottom-left");
         view._eipWidgets.push(resetAction);
 
         const scale = new ScaleBar({ view, unit: "imperial" });
