@@ -469,6 +469,79 @@
     }
     .panel-tab:active { transform: translateY(-50%) scale(0.96); }
 
+    /* Map-area card — shown when a Class C (no-location) project is
+       opened from the list. Covers the map only, side panels stay live. */
+    .visually-hidden {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+    .project-card {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: min(440px, calc(100% - 32px));
+      max-height: calc(100% - 32px);
+      background: var(--white);
+      border-radius: 12px;
+      box-shadow: 0 8px 28px rgba(11,31,65,0.28);
+      z-index: 90;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: project-card-in 160ms ease-out;
+    }
+    @keyframes project-card-in {
+      from { opacity: 0; transform: translate(-50%, -48%); }
+      to   { opacity: 1; transform: translate(-50%, -50%); }
+    }
+    .project-card-header {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      border-bottom: 1px solid var(--gray-border);
+      flex-shrink: 0;
+    }
+    .project-card-banner {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.6rem 0.9rem;
+      background: var(--eip-orange);
+      color: var(--white);
+      font-size: 0.74rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .project-card-banner-icon {
+      font-size: 1rem;
+      line-height: 1;
+      opacity: 0.95;
+    }
+    .project-card-close {
+      width: 38px;
+      flex-shrink: 0;
+      background: var(--white);
+      border: none;
+      border-left: 1px solid var(--gray-border);
+      color: var(--eip-navy);
+      font-size: 1.4rem;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 100ms ease-out;
+    }
+    .project-card-close:hover { background: var(--eip-blue-light); color: var(--eip-blue); }
+    .project-card-body {
+      padding: 0.85rem 1rem 1rem;
+      overflow-y: auto;
+    }
+    /* Reuse the same popup CSS — re-target .eip-popup width so it fills
+       the card instead of being capped at 360px like in map popups */
+    .project-card-body .eip-popup { max-width: none; }
+
     /* ── List panel ── */
     #list-panel {
       background: var(--white);
@@ -615,6 +688,30 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+
+    /* Class B / C indicator pills on list rows */
+    .class-pill {
+      display: inline-block;
+      padding: 0 6px;
+      border-radius: 999px;
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      border: 1px solid;
+      background: transparent;
+      white-space: nowrap;
+    }
+    .class-pill-b {
+      color: var(--eip-blue);
+      border-color: var(--eip-blue);
+    }
+    .class-pill-c {
+      color: var(--eip-orange);
+      border-color: var(--eip-orange);
+    }
+    .row-class-b .name,
+    .row-class-c .name { font-style: italic; }
 
     .empty-state {
       padding: 2rem 1.5rem;
@@ -911,6 +1008,22 @@
     <button id="list-tab" class="panel-tab right" type="button"
       aria-controls="cs-list" aria-expanded="true"
       title="Hide projects panel">PROJECTS</button>
+
+    <!-- Map-area card — shown when user clicks a Class C (no-location)
+         project in the list. Covers the map but leaves the side panels
+         interactive. Body uses the same renderPopup() HTML as map popups. -->
+    <div id="project-card" class="project-card" hidden role="dialog" aria-modal="false" aria-labelledby="project-card-title">
+      <div class="project-card-header">
+        <div class="project-card-banner">
+          <span class="project-card-banner-icon" aria-hidden="true">⊘</span>
+          <span>No map location — basin-wide project</span>
+        </div>
+        <button id="project-card-close" class="project-card-close" type="button"
+          title="Close" aria-label="Close project card">×</button>
+      </div>
+      <div id="project-card-title" class="visually-hidden">Project details</div>
+      <div id="project-card-body" class="project-card-body"></div>
+    </div>
   </div>
 
   <!-- ── RIGHT PANEL (Calcite Shell handles dock layout + collapse) ── -->
@@ -1028,6 +1141,53 @@
   const LOCAL_GEOJSON = "../data/projects.geojson";
   const LOCAL_DETAILED = "../data/detailed.geojson";
   const LOCAL_ASPATIAL = "../data/projects_aspatial.json";
+  const LOCAL_DETAILED_EIPS = "../data/detailed_eips.json";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Explicit field schemas for the GeoJSONLayers — required because
+  // ArcGIS infers field types from the first features, and any field
+  // null in those samples (e.g. EstimatedAnnualOperatingCost,
+  // IsLakeClarityProject) gets DROPPED, silently breaking filter where
+  // clauses, renderers, and popup field references downstream.
+  // ─────────────────────────────────────────────────────────────────────
+  const POINTS_LAYER_FIELDS = [
+    { name: "ProjectID",                 type: "string", alias: "Project ID" },
+    { name: "EIPProjectNumber",          type: "string", alias: "EIP #" },
+    { name: "ProjectName",               type: "string", alias: "Project Name" },
+    { name: "Category",                  type: "string", alias: "Focus Area" },
+    { name: "ProjectURL",                type: "string", alias: "Project URL" },
+    { name: "EIPFocusArea",              type: "string" },
+    { name: "EIPProgram",                type: "string", alias: "Program" },
+    { name: "EIPActionPriority",         type: "string", alias: "Action Priority" },
+    { name: "ProjectDescription",        type: "string", alias: "Description" },
+    { name: "ProjectThresholdCategories",type: "string", alias: "Threshold Categories" },
+    { name: "LeadImplementer",           type: "string", alias: "Lead Implementer" },
+    { name: "PlanningStartDate",         type: "integer" },
+    { name: "ImplementationStartDate",   type: "integer" },
+    { name: "EndDate",                   type: "integer" },
+    { name: "Stage",                     type: "string" },
+    { name: "ProjectRegion",             type: "string", alias: "Region" },
+    { name: "ProjectState",              type: "string", alias: "State" },
+    { name: "ProjectJurisdiction",       type: "string", alias: "Jurisdiction" },
+    { name: "ProjectWatershed",          type: "string", alias: "Watershed" },
+    { name: "ProjectSummaryUrl",         type: "string" },
+    { name: "ProjectFactSheetUrl",       type: "string" },
+    { name: "TMDLPollutantSourceCategory", type: "string" },
+    { name: "EstimatedTotalCost",        type: "double" },
+    { name: "EstimatedAnnualOperatingCost", type: "double" },
+    { name: "IsEIPProject",              type: "small-integer" },   // boolean coerced to 0/1
+    { name: "IsTransportationProject",   type: "small-integer" },
+    { name: "IsLakeClarityProject",      type: "small-integer" },
+  ];
+
+  const DETAILED_LAYER_FIELDS = [
+    { name: "ProjectID",                 type: "string" },
+    { name: "EIPProjectNumber",          type: "string", alias: "EIP #" },
+    { name: "ProjectName",               type: "string", alias: "Project Name" },
+    { name: "Info",                      type: "string" },
+    { name: "Category",                  type: "string", alias: "Focus Area" },
+    { name: "ProjectURL",                type: "string" },
+  ];
   const LIVE_REST_URL =
     "https://www.laketahoeinfo.org/WebServices/" +
     "GetProjectSimpleLocationAndGeospatialAssociations/JSON/" +
@@ -1047,7 +1207,8 @@
   // ─────────────────────────────────────────────────────────────────────
   const state = {
     allFeatures: [],                 // raw point features from projects.geojson
-    aspatialRecords: [],             // basin-wide / no-location projects (CSV-only)
+    aspatialRecords: [],             // basin-wide / no-location projects (CSV + list)
+    detailedEips: new Set(),         // EIP # that have detailed geometry → drives Class B/C tagging
     detailedFeatures: [],            // polygons/lines/points from detailed.geojson (lazy)
     detailedLoaded: false,
     activeCategories: new Set(),
@@ -1143,6 +1304,22 @@
     } catch (err) {
       console.warn("Aspatial records not loaded:", err.message);
       return [];
+    }
+  }
+
+  async function loadDetailedEips() {
+    // Tiny array (~9 KB) of EIP # that have polygons/lines/points in
+    // detailed.geojson. Used to classify aspatial records as either
+    // Class B (footprint-only — has detailed geometry but no centroid)
+    // or Class C (truly aspatial — no map data anywhere).
+    try {
+      const resp = await fetch(LOCAL_DETAILED_EIPS);
+      if (!resp.ok) return new Set();
+      const data = await resp.json();
+      return new Set(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.warn("Detailed EIPs index not loaded:", err.message);
+      return new Set();
     }
   }
 
@@ -1798,24 +1975,53 @@
     );
   }
 
+  // Wrap an aspatial record (plain props object) as a feature-like for
+  // unified list rendering. _class is "B" if the project has detailed
+  // geometry (so it CAN be shown on the map via the footprints layer),
+  // "C" if it has no map presence at all.
+  function aspatialAsFeature(rec) {
+    return {
+      type: "Feature",
+      geometry: null,
+      properties: rec,
+      _aspatial: true,
+      _class: state.detailedEips.has(rec.EIPProjectNumber) ? "B" : "C",
+    };
+  }
+
   function renderList() {
     const scroll = document.getElementById("list-scroll");
     const empty = document.getElementById("list-empty");
 
+    // Merge spatial (Class A) + aspatial (Class B / C) into one source.
+    const aspatialAsFeatures = state.aspatialRecords.map(aspatialAsFeature);
+    const allSources = state.allFeatures.concat(aspatialAsFeatures);
+
     let filtered, inView;
     if (state.showSelectedOnly) {
-      // In selection-preview mode: list & map both show only selection
-      filtered = state.allFeatures.filter(f =>
+      filtered = allSources.filter(f =>
         state.selection.has(f.properties.EIPProjectNumber));
-      inView = filtered;       // ignore extent so all selected are visible
+      inView = filtered;
     } else {
-      filtered = state.allFeatures.filter(passesFilters);
-      inView = filtered.filter(inExtent);
+      filtered = allSources.filter(passesFilters);
+      // Extent filter applies ONLY to spatial features. Aspatial / Class B /
+      // Class C have no centroid, so they always show as long as they
+      // pass the active filters.
+      inView = filtered.filter(f => f._aspatial || inExtent(f));
     }
 
-    document.getElementById("list-meta-text").textContent = state.showSelectedOnly
-      ? `${filtered.length.toLocaleString()} selected`
-      : `${inView.length.toLocaleString()} of ${filtered.length.toLocaleString()} in view`;
+    // Counter — separate spatial vs basin-wide so users see both
+    const spatialN = inView.filter(f => !f._aspatial).length;
+    const aspatialN = inView.length - spatialN;
+    let metaText;
+    if (state.showSelectedOnly) {
+      metaText = `${filtered.length.toLocaleString()} selected`;
+    } else if (aspatialN === 0) {
+      metaText = `${spatialN.toLocaleString()} of ${filtered.filter(f => !f._aspatial).length.toLocaleString()} in view`;
+    } else {
+      metaText = `${spatialN.toLocaleString()} on map · ${aspatialN.toLocaleString()} basin-wide`;
+    }
+    document.getElementById("list-meta-text").textContent = metaText;
     refreshExportTargetText();
 
     Array.from(scroll.children).forEach(child => {
@@ -1839,19 +2045,34 @@
       const row = document.createElement("div");
       row.className = "list-row";
       const eip = f.properties.EIPProjectNumber;
+      const klass = f._aspatial ? f._class : "A";
       row.dataset.eip = eip;
+      row.dataset.class = klass;
+      if (klass === "B") row.classList.add("row-class-b");
+      if (klass === "C") row.classList.add("row-class-c");
       if (state.selection.has(eip)) row.classList.add("active");
 
-      // Keyboard accessibility — row acts like a button (Enter/Space → zoom to feature)
+      // Keyboard accessibility
       row.setAttribute("role", "button");
       row.setAttribute("tabindex", "0");
+      const actionLabel = klass === "A" ? "Zoom to"
+                       : klass === "B" ? "Show footprint of"
+                       : "Open details for";
       row.setAttribute("aria-label",
-        `Zoom to ${f.properties.ProjectName}, EIP ${eip}`);
+        `${actionLabel} ${f.properties.ProjectName}, EIP ${eip}`);
 
       const cat = categoryOf(f);
       const dot = CATEGORY_COLOR[cat] || [154, 163, 173, 0.85];
       const rgba = `rgba(${dot[0]},${dot[1]},${dot[2]},${dot[3] ?? 1})`;
       const checked = state.selection.has(eip) ? "checked" : "";
+
+      // Class B / C get a small pill flagging their map status
+      let classPill = "";
+      if (klass === "B") {
+        classPill = `<span class="class-pill class-pill-b" title="No centroid, but has polygon/line on the map">FOOTPRINT</span>`;
+      } else if (klass === "C") {
+        classPill = `<span class="class-pill class-pill-c" title="Basin-wide project — no map location">NO LOCATION</span>`;
+      }
 
       row.innerHTML = `
         <input type="checkbox" class="row-checkbox" data-eip="${escapeAttr(eip)}"
@@ -1862,21 +2083,29 @@
           <div class="meta">
             <span class="cat-pill" style="background:${rgba};">${escapeHtml(cat)}</span>
             <span>EIP ${escapeHtml(eip)}</span>
+            ${classPill}
           </div>
         </div>
       `;
 
       const cb = row.querySelector(".row-checkbox");
       cb.addEventListener("click", e => e.stopPropagation());
-      cb.addEventListener("keydown", e => e.stopPropagation());  // don't trigger row's keydown
+      cb.addEventListener("keydown", e => e.stopPropagation());
       cb.addEventListener("change", e => {
         toggleSelection(eip, e.target.checked);
       });
-      row.addEventListener("click", () => zoomToFeature(f));
+
+      // Click action diverges by class
+      const handleActivate = () => {
+        if (klass === "A")      zoomToFeature(f);
+        else if (klass === "B") showFootprintForProject(f.properties);
+        else                    openProjectCard(f.properties);   // Class C
+      };
+      row.addEventListener("click", handleActivate);
       row.addEventListener("keydown", e => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          zoomToFeature(f);
+          handleActivate();
         }
       });
       frag.appendChild(row);
@@ -1940,6 +2169,12 @@
         popupTemplate: buildPopupTemplate(),
         outFields: ["*"],
         copyright: "LakeTahoeInfo.org",
+        // Explicit field schema — without it, ArcGIS infers types from
+        // the first features and DROPS fields that are null in those
+        // samples (e.g. EstimatedAnnualOperatingCost, IsLakeClarityProject
+        // for early projects), which silently breaks filter where-clauses
+        // and popup field references downstream.
+        fields: POINTS_LAYER_FIELDS,
         // Pins billboard at ground level in 3D — relative-to-ground places
         // them at terrain elevation while keeping the symbol facing the
         // camera. (on-the-ground would rasterize them flat onto the surface.)
@@ -2217,6 +2452,96 @@
     });
   }
 
+  // ─── Class C: open the map-area card with the rich popup HTML ───
+  function openProjectCard(props) {
+    const card = document.getElementById("project-card");
+    const body = document.getElementById("project-card-body");
+    body.innerHTML = renderPopup(props);
+    // Wire the show-more toggle inside the card body
+    const toggle = body.querySelector(".pop-desc-toggle");
+    if (toggle) {
+      toggle.addEventListener("click", () => {
+        const targetId = toggle.dataset.target;
+        const desc = body.querySelector("#" + targetId);
+        if (!desc) return;
+        const expanded = desc.classList.toggle("expanded");
+        toggle.textContent = expanded ? "Show less ↑" : "Show more ↓";
+        toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+      });
+    }
+    card.hidden = false;
+  }
+  function closeProjectCard() {
+    const card = document.getElementById("project-card");
+    if (card) card.hidden = true;
+  }
+
+  // ─── Class B: ensure footprints visible, zoom to bounding extent of
+  // this project's detailed features, and open a popup on one of them ─
+  async function showFootprintForProject(props) {
+    const eip = props.EIPProjectNumber;
+    // Make sure the footprints layer is loaded + visible. setFootprintsVisible
+    // is async and handles load failure with a toast; if it errors we're done.
+    const ftSw = document.getElementById("footprints-toggle");
+    if (ftSw && !ftSw.checked) ftSw.checked = true;
+    await setFootprintsVisible(true);
+    if (!state.detailedLoaded) return;   // load failed — toast already shown
+
+    // Find this project's detailed features and compute their bounding box
+    const matches = state.detailedFeatures.filter(f =>
+      (f.properties || {}).EIPProjectNumber === eip);
+    if (!matches.length) {
+      toast("No footprint geometry found for this project", "error");
+      return;
+    }
+    let xmin = Infinity, ymin = Infinity, xmax = -Infinity, ymax = -Infinity;
+    function visit(coords) {
+      if (typeof coords[0] === "number") {
+        const [x, y] = coords;
+        if (x < xmin) xmin = x; if (x > xmax) xmax = x;
+        if (y < ymin) ymin = y; if (y > ymax) ymax = y;
+      } else {
+        for (const c of coords) visit(c);
+      }
+    }
+    for (const f of matches) {
+      const g = f.geometry;
+      if (g && g.coordinates) visit(g.coordinates);
+    }
+    if (!isFinite(xmin)) {
+      toast("Footprint geometry is empty for this project", "error");
+      return;
+    }
+    const extent = {
+      xmin, ymin, xmax, ymax,
+      spatialReference: { wkid: 4326 },
+    };
+
+    // Zoom + open popup with the rich props (from the aspatial record),
+    // anchored at the centroid of the bounding extent
+    if (state.view) {
+      state.view.goTo({ target: extent, expand: 1.4 }, { duration: 500 })
+        .catch(() => {});
+      const cx = (xmin + xmax) / 2, cy = (ymin + ymax) / 2;
+      require(["esri/Graphic"], Graphic => {
+        const g = new Graphic({
+          geometry: { type: "point", longitude: cx, latitude: cy },
+          attributes: props,
+          popupTemplate: buildPopupTemplate(),
+        });
+        state.view.openPopup({ location: g.geometry, features: [g] });
+      });
+    }
+  }
+
+  function setupProjectCardClose() {
+    const closeBtn = document.getElementById("project-card-close");
+    if (closeBtn) closeBtn.addEventListener("click", closeProjectCard);
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape") closeProjectCard();
+    });
+  }
+
   // ─────────────────────────────────────────────────────────────────────
   // Detailed footprints layer (lazy)
   // ─────────────────────────────────────────────────────────────────────
@@ -2252,6 +2577,9 @@
         popupTemplate: buildPopupTemplate(),
         outFields: ["*"],
         copyright: "LakeTahoeInfo.org",
+        // Explicit fields — same reason as the points layer (avoid
+        // null-inference dropping fields that filters / renderer use).
+        fields: DETAILED_LAYER_FIELDS,
         // Drape polygons & lines on terrain in 3D
         elevationInfo: { mode: "on-the-ground" },
       });
@@ -2269,13 +2597,19 @@
     });
   }
 
-  function setFootprintsVisible(on) {
+  async function setFootprintsVisible(on) {
+    // Await the load on first toggle-on so visibility actually applies to
+    // the new layer (previous version raced — kicked off async load,
+    // then immediately tried to set visible on a null layer).
     if (on) {
-      ensureDetailedLoaded().catch(err => {
+      try {
+        await ensureDetailedLoaded();
+      } catch (err) {
         console.error(err);
         toast("Couldn't load footprints — check your connection", "error");
         document.getElementById("footprints-toggle").checked = false;
-      });
+        return;
+      }
     }
     if (state.detailedLayer) state.detailedLayer.visible = on;
     document.getElementById("include-footprints-row")
@@ -2759,19 +3093,32 @@
   async function init() {
     setStatus("snapshot", "Loading snapshot…");
     try {
-      const [local, aspatial] = await Promise.all([
+      const [local, aspatial, detailedEips] = await Promise.all([
         loadLocalSnapshot(),
         loadAspatial(),
+        loadDetailedEips(),
       ]);
+      state.detailedEips = detailedEips;
+      // Coerce booleans to 0/1 to match the small-integer field schema we
+      // declared on the GeoJSONLayer (otherwise the schema vs. data type
+      // mismatch makes filter where-clauses like `IsEIPProject = 1` fail).
+      const FLAG_FIELDS = ["IsEIPProject", "IsTransportationProject", "IsLakeClarityProject"];
+      function coerceFlags(p) {
+        for (const k of FLAG_FIELDS) {
+          if (typeof p[k] === "boolean") p[k] = p[k] ? 1 : 0;
+        }
+      }
       // ensure derived Category is present (snapshot was built with it,
       // but re-derive defensively in case the live refresh path ran first)
       for (const f of local.features) {
         if (!f.properties.Category) {
           f.properties.Category = focusAreaFromEIP(f.properties.EIPProjectNumber);
         }
+        coerceFlags(f.properties);
       }
       for (const r of aspatial) {
         if (!r.Category) r.Category = focusAreaFromEIP(r.EIPProjectNumber);
+        coerceFlags(r);
       }
       state.allFeatures = local.features;
       state.aspatialRecords = aspatial;
@@ -2788,6 +3135,7 @@
       setupClusterToggle();
       setup3DToggle();
       setupPanelCollapse();
+      setupProjectCardClose();
       buildMap(local);
       refreshSelectionUI();
 

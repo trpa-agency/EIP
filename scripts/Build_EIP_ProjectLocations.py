@@ -56,6 +56,7 @@ SIMPLE_JSON_PATH = DATA_DIR / "simple.json"
 DETAILED_GEOJSON_PATH = DATA_DIR / "detailed.geojson"
 PROJECTS_GEOJSON_PATH = DATA_DIR / "projects.geojson"
 ASPATIAL_JSON_PATH = DATA_DIR / "projects_aspatial.json"
+DETAILED_EIPS_PATH = DATA_DIR / "detailed_eips.json"   # tiny array of EIP # that have polygons/lines/points (used by the dashboard to classify list rows)
 
 # ------------------------------------------------------------------------
 # Lake Tahoe Info endpoints
@@ -518,6 +519,22 @@ def fetch_detailed():
         return None
     features = fc.get("features") or []
     log.info(f"Detailed endpoint: {len(features):,} features fetched")
+
+    # Tiny side-output: the unique set of EIP # that have ANY detailed
+    # geometry. The dashboard reads this at init (~5 KB) to classify list
+    # rows as Class B (footprint-only) without having to fetch the full
+    # 6.8 MB detailed.geojson up front.
+    detailed_eips = sorted({
+        str((f.get("properties") or {}).get("EIPProjectNumber") or "").strip()
+        for f in features
+        if (f.get("properties") or {}).get("EIPProjectNumber")
+    })
+    DETAILED_EIPS_PATH.write_text(
+        json.dumps(detailed_eips, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    log.info(f"Wrote {len(detailed_eips):,} unique EIP #s to {DETAILED_EIPS_PATH}")
+
     return fc
 
 
