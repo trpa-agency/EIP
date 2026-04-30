@@ -987,7 +987,7 @@
         </div>
         <label class="include-footprints" id="include-footprints-row">
           <input type="checkbox" id="include-footprints" />
-          Include polygons &amp; lines
+          Include detailed geometry
         </label>
         <div class="toggle-status" id="export-target-text">
           Will export 0 features
@@ -1072,31 +1072,31 @@
   <div id="layer-controls" class="layer-controls-panel">
     <div class="section-label" style="margin-bottom:0.6rem;">Map Options</div>
 
-    <label class="toggle-row" for="threed-toggle"
+    <calcite-label layout="inline-space-between" alignment="start"
       title="Switch between a flat 2D map view and a tilted 3D scene over real terrain">
-      <span id="threed-label">3D view</span>
-      <calcite-switch id="threed-toggle" scale="s" aria-labelledby="threed-label"></calcite-switch>
-    </label>
+      3D view
+      <calcite-switch id="threed-toggle" scale="s" label="3D view"></calcite-switch>
+    </calcite-label>
     <div class="toggle-status" id="threed-status">
       2D flat map
     </div>
 
-    <label class="toggle-row" for="cluster-toggle" style="margin-top:0.7rem;"
+    <calcite-label layout="inline-space-between" alignment="start" style="margin-top:0.7rem;"
       title="Group nearby project points into clusters colored by dominant Focus Area">
-      <span id="cluster-label">Cluster points</span>
-      <calcite-switch id="cluster-toggle" scale="s" aria-labelledby="cluster-label"></calcite-switch>
-    </label>
+      Cluster points
+      <calcite-switch id="cluster-toggle" scale="s" label="Cluster points"></calcite-switch>
+    </calcite-label>
     <div class="toggle-status" id="cluster-status">
       Each project as a pin
     </div>
 
-    <label class="toggle-row" for="footprints-toggle" style="margin-top:0.7rem;"
-      title="Lazy-load detailed project footprints (polygons & lines, ~6.8 MB)">
-      <span id="footprints-label">Show polygons &amp; lines</span>
-      <calcite-switch id="footprints-toggle" scale="s" aria-labelledby="footprints-label"></calcite-switch>
-    </label>
+    <calcite-label layout="inline-space-between" alignment="start" style="margin-top:0.7rem;"
+      title="Show the detailed polygons / lines for the projects you've selected">
+      Show detailed geometry
+      <calcite-switch id="footprints-toggle" scale="s" label="Show detailed geometry"></calcite-switch>
+    </calcite-label>
     <div class="toggle-status" id="footprints-status">
-      Polygons &amp; lines hidden
+      Detailed geometry hidden
     </div>
   </div>
 </div>
@@ -2581,8 +2581,8 @@
 
     state.detailedFeatures = fc.features;
     state.detailedLoaded = true;
-    document.getElementById("footprints-status").textContent =
-      `${fc.features.length.toLocaleString()} footprints on map`;
+    // status is updated by updateFootprintsStatus() once setFootprintsVisible
+    // finishes — no need to set anything transient here
     document.getElementById("include-footprints-row").removeAttribute("disabled");
     refreshExportTargetText();
 
@@ -2636,11 +2636,11 @@
     const on = sw && sw.checked;
     const n = state.selection.size;
     if (!on) {
-      status.textContent = "Polygons & lines hidden";
+      status.textContent = "Detailed geometry hidden";
     } else if (n === 0) {
-      status.textContent = "On — pick projects to show their footprints";
+      status.textContent = "On — pick projects to show their geometry";
     } else {
-      status.textContent = `Showing footprints for ${n.toLocaleString()} selected project${n === 1 ? "" : "s"}`;
+      status.textContent = `Showing detailed geometry for ${n.toLocaleString()} selected project${n === 1 ? "" : "s"}`;
     }
   }
 
@@ -3068,9 +3068,7 @@
     const ftSw = document.getElementById("footprints-toggle");
     if (ftSw && ftSw.checked) ftSw.checked = false;
     setFootprintsVisible(false);
-    document.getElementById("footprints-status").textContent = state.detailedLoaded
-      ? `${state.detailedFeatures.length.toLocaleString()} footprints hidden`
-      : "Polygons & lines hidden";
+    // status is updated by updateFootprintsStatus() inside setFootprintsVisible
     // Cluster off
     const clSw = document.getElementById("cluster-toggle");
     if (clSw && clSw.checked) clSw.checked = false;
