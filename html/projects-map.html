@@ -1860,7 +1860,9 @@
   function applyFilters() {
     const where = arcgisWhereClause();
     if (state.pointsLayerView) state.pointsLayerView.filter = { where };
-    if (state.detailedLayerView) state.detailedLayerView.filter = { where };
+    // The detailed (footprints) layer is selection-scoped — driven by
+    // updateFootprintsFilter() instead. We don't apply the broader
+    // category/stage filter to it.
     renderList();
   }
 
@@ -1872,6 +1874,7 @@
     if (on) state.selection.add(eipNumber);
     else    state.selection.delete(eipNumber);
     refreshSelectionUI();
+    updateFootprintsFilter();
   }
 
   function clearSelection() {
@@ -1879,6 +1882,7 @@
     if (state.pointsLayer) state.pointsLayer.labelsVisible = false;
     refreshSelectionUI();
     renderList();
+    updateFootprintsFilter();
   }
 
   function selectVisible() {
@@ -1887,6 +1891,7 @@
     for (const f of visible) state.selection.add(f.properties.EIPProjectNumber);
     refreshSelectionUI();
     renderList();
+    updateFootprintsFilter();
   }
 
   function refreshSelectionUI() {
@@ -2476,12 +2481,24 @@
     if (card) card.hidden = true;
   }
 
-  // ─── Class B: ensure footprints visible, zoom to bounding extent of
-  // this project's detailed features, and open a popup on one of them ─
+  // ─── Class B: add to selection (so the footprint actually renders
+  // through the selection-scoped filter), ensure footprints visible,
+  // zoom to bounding extent, open popup ─
   async function showFootprintForProject(props) {
     const eip = props.EIPProjectNumber;
-    // Make sure the footprints layer is loaded + visible. setFootprintsVisible
-    // is async and handles load failure with a toast; if it errors we're done.
+    // Add to selection — footprints are now selection-scoped, so this
+    // is what makes the polygon actually render. toggleSelection also
+    // calls updateFootprintsFilter() under the hood.
+    if (!state.selection.has(eip)) {
+      state.selection.add(eip);
+      refreshSelectionUI();
+      // Reflect in the rendered list row's checkbox if it's showing
+      const cb = document.querySelector(`.row-checkbox[data-eip="${eip.replace(/"/g, '&quot;')}"]`);
+      if (cb) cb.checked = true;
+      const row = document.querySelector(`.list-row[data-eip="${eip.replace(/"/g, '&quot;')}"]`);
+      if (row) row.classList.add("active");
+    }
+    // Auto-enable the footprints toggle so the layer becomes visible
     const ftSw = document.getElementById("footprints-toggle");
     if (ftSw && !ftSw.checked) ftSw.checked = true;
     await setFootprintsVisible(true);
@@ -2597,6 +2614,36 @@
     });
   }
 
+  // Apply the current selection set as the detailed (footprints) layer
+  // filter. Empty selection → "1=0" (renders nothing). Called from every
+  // selection mutator so the footprints layer always reflects the user's
+  // active picks — sidesteps the "wall of bad polygons" of the legacy
+  // show-everything behavior.
+  function updateFootprintsFilter() {
+    if (!state.detailedLayerView) return;
+    const ids = Array.from(state.selection);
+    const where = ids.length
+      ? `EIPProjectNumber IN (${ids.map(id => `'${escSql(id)}'`).join(",")})`
+      : "1=0";
+    state.detailedLayerView.filter = { where };
+    updateFootprintsStatus();
+  }
+
+  function updateFootprintsStatus() {
+    const status = document.getElementById("footprints-status");
+    if (!status) return;
+    const sw = document.getElementById("footprints-toggle");
+    const on = sw && sw.checked;
+    const n = state.selection.size;
+    if (!on) {
+      status.textContent = "Polygons & lines hidden";
+    } else if (n === 0) {
+      status.textContent = "On — pick projects to show their footprints";
+    } else {
+      status.textContent = `Showing footprints for ${n.toLocaleString()} selected project${n === 1 ? "" : "s"}`;
+    }
+  }
+
   async function setFootprintsVisible(on) {
     // Await the load on first toggle-on so visibility actually applies to
     // the new layer (previous version raced — kicked off async load,
@@ -2612,19 +2659,15 @@
       }
     }
     if (state.detailedLayer) state.detailedLayer.visible = on;
+    // Include-footprints checkbox enabled whenever the data is loaded;
+    // no longer requires the toggle to be on.
     document.getElementById("include-footprints-row")
-      .toggleAttribute("disabled", !on || !state.detailedLoaded);
+      .toggleAttribute("disabled", !state.detailedLoaded);
     if (!on) document.getElementById("include-footprints").checked = false;
 
-    // Keep the status line in sync with both visibility and loaded state
-    const status = document.getElementById("footprints-status");
-    if (on && state.detailedLoaded) {
-      status.textContent = `${state.detailedFeatures.length.toLocaleString()} footprints on map`;
-    } else if (!on && state.detailedLoaded) {
-      status.textContent = `${state.detailedFeatures.length.toLocaleString()} footprints hidden`;
-    } else if (!on) {
-      status.textContent = "Polygons & lines hidden";
-    }
+    // Apply selection-scoped filter (empty selection → 1=0 → nothing renders)
+    updateFootprintsFilter();
+    updateFootprintsStatus();
     refreshExportTargetText();
   }
 
