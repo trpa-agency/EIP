@@ -505,12 +505,80 @@ def build_points_fc(df_matched):
 # ------------------------------------------------------------------------
 # Detailed endpoint
 # ------------------------------------------------------------------------
+GEOM_TYPE_BUCKETS = {
+    "Polygon": "Polygon", "MultiPolygon": "Polygon",
+    "LineString": "Line", "MultiLineString": "Line",
+    "Point": "Point", "MultiPoint": "Point",
+}
+
+
+def dissolve_detailed_features(fc):
+    """Aggregate the raw detailed features by (EIPProjectNumber, geom-type
+    bucket) so each project ends up with at most three features (polygon,
+    line, point). Without this step the upstream feed has a few projects
+    contributing thousands of fragment features each (e.g. one project
+    has 4,005, another 2,071) which overwhelms the dashboard map even
+    with a selection-scoped filter applied.
+
+    Uses geopandas (already in arcgispro-py3 + on the GitHub Action runner
+    via the requirements install). Falls back to passing the raw FC
+    through if geopandas isn't importable, so the script still completes.
+    """
+    if not isinstance(fc, dict) or not fc.get("features"):
+        return fc
+    try:
+        import geopandas as gpd  # noqa: WPS433 (lazy import)
+    except ImportError:
+        log.warning("geopandas unavailable — skipping detailed-feature dissolve "
+                    "(footprints layer may render thousands of fragment polygons)")
+        return fc
+
+    raw_n = len(fc["features"])
+    try:
+        gdf = gpd.GeoDataFrame.from_features(fc["features"], crs="EPSG:4326")
+    except Exception as e:
+        log.warning(f"GeoDataFrame.from_features failed ({e}); skipping dissolve")
+        return fc
+    if gdf.empty or "EIPProjectNumber" not in gdf.columns:
+        return fc
+
+    # Bucket geometry types so a project's many small Polygons collapse to
+    # one MultiPolygon, its many LineStrings to one MultiLineString, etc.
+    gdf["_geom_bucket"] = gdf.geometry.geom_type.map(GEOM_TYPE_BUCKETS).fillna("Other")
+    # Drop unknown geometry types (rare; just a safety net)
+    gdf = gdf[gdf["_geom_bucket"] != "Other"]
+    if gdf.empty:
+        return fc
+
+    # Coerce EIPProjectNumber to string for stable grouping
+    gdf["EIPProjectNumber"] = gdf["EIPProjectNumber"].astype(str)
+
+    # Dissolve combines geometries via shapely.unary_union per group.
+    # by=[...] keeps those columns; aggfunc="first" keeps the first row's
+    # other props (ProjectName, ProjectID — same per project) which is what
+    # we want.
+    try:
+        dissolved = gdf.dissolve(
+            by=["EIPProjectNumber", "_geom_bucket"],
+            aggfunc="first",
+            as_index=False,
+        )
+    except Exception as e:
+        log.warning(f"dissolve failed ({e}); returning raw FC")
+        return fc
+
+    # Drop the bucket helper column before serialising
+    dissolved = dissolved.drop(columns=["_geom_bucket"])
+    out = json.loads(dissolved.to_json())
+    log.info(f"Dissolved detailed features: {raw_n:,} → {len(out['features']):,} "
+             f"(grouped by EIPProjectNumber + geometry type)")
+    return out
+
+
 def fetch_detailed():
     log.info(f"Fetching detailed locations: {DETAILED_URL}")
     resp = requests.get(DETAILED_URL, timeout=120)
     resp.raise_for_status()
-    DETAILED_GEOJSON_PATH.write_text(resp.text, encoding="utf-8")
-    log.info(f"Wrote raw GeoJSON to {DETAILED_GEOJSON_PATH} ({len(resp.text):,} bytes)")
 
     fc = resp.json()
     if not isinstance(fc, dict) or fc.get("type") != "FeatureCollection":
@@ -518,12 +586,11 @@ def fetch_detailed():
                     f"(got type={fc.get('type') if isinstance(fc, dict) else type(fc).__name__})")
         return None
     features = fc.get("features") or []
-    log.info(f"Detailed endpoint: {len(features):,} features fetched")
+    log.info(f"Detailed endpoint: {len(features):,} raw features fetched")
 
-    # Tiny side-output: the unique set of EIP # that have ANY detailed
-    # geometry. The dashboard reads this at init (~5 KB) to classify list
-    # rows as Class B (footprint-only) without having to fetch the full
-    # 6.8 MB detailed.geojson up front.
+    # Compute the unique-EIP index BEFORE dissolving (so it counts the
+    # set of projects that have any detailed geometry — same answer
+    # either way, but cheaper from the raw list)
     detailed_eips = sorted({
         str((f.get("properties") or {}).get("EIPProjectNumber") or "").strip()
         for f in features
@@ -534,6 +601,16 @@ def fetch_detailed():
         encoding="utf-8",
     )
     log.info(f"Wrote {len(detailed_eips):,} unique EIP #s to {DETAILED_EIPS_PATH}")
+
+    # Dissolve fragment features per project (8,506 → ~800) before saving
+    fc = dissolve_detailed_features(fc)
+
+    DETAILED_GEOJSON_PATH.write_text(
+        json.dumps(fc, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    size_kb = DETAILED_GEOJSON_PATH.stat().st_size / 1024
+    log.info(f"Wrote dissolved GeoJSON to {DETAILED_GEOJSON_PATH} ({size_kb:,.0f} KB)")
 
     return fc
 
