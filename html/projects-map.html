@@ -2597,38 +2597,49 @@
     }
 
     state.detailedFeatures = fc.features;
+
+    // Promise-wrap the AMD require so we can `await` the layer module
+    // before continuing — without this, `await ensureDetailedLoaded()`
+    // resolved BEFORE the layer was even created, so caller code calling
+    // updateFootprintsFilter() found state.detailedLayerView still null
+    // and silently skipped applying the filter, leaving the layer to
+    // render its default visible: true with NO filter (= all 8,506
+    // features showing on a single-project click).
+    const GeoJSONLayer = await new Promise(resolve =>
+      require(["esri/layers/GeoJSONLayer"], resolve)
+    );
+    const layer = new GeoJSONLayer({
+      url: fcToBlobUrl(fc),
+      title: "EIP Projects (footprints)",
+      renderer: buildDetailedRenderer(),
+      popupTemplate: buildPopupTemplate(),
+      outFields: ["*"],
+      copyright: "LakeTahoeInfo.org",
+      // Explicit fields — same reason as the points layer (avoid
+      // null-inference dropping fields that filters / renderer use).
+      fields: DETAILED_LAYER_FIELDS,
+      // Drape polygons & lines on terrain in 3D
+      elevationInfo: { mode: "on-the-ground" },
+      // Start hidden — caller flips visible (and applies the
+      // selection-scoped filter) after awaiting this function
+      visible: false,
+    });
+    state.detailedLayer = layer;
+    // Insert above the TRPA boundary but below the points (so dots stay on top)
+    const boundaryIdx = state.boundaryLayer
+      ? state.view.map.layers.indexOf(state.boundaryLayer) : -1;
+    const insertAt = boundaryIdx >= 0 ? boundaryIdx + 1 : 0;
+    state.view.map.add(layer, insertAt);
+
+    // Await the layerView so the caller can immediately apply the
+    // selection-scoped filter via updateFootprintsFilter(). Critical:
+    // sets detailedLayerView BEFORE detailedLoaded so callers using
+    // detailedLoaded as a "ready" signal don't race the filter.
+    state.detailedLayerView = await state.view.whenLayerView(layer);
+
     state.detailedLoaded = true;
-    // status is updated by updateFootprintsStatus() once setFootprintsVisible
-    // finishes — no need to set anything transient here
     document.getElementById("include-footprints-row").removeAttribute("disabled");
     refreshExportTargetText();
-
-    require(["esri/layers/GeoJSONLayer"], GeoJSONLayer => {
-      const layer = new GeoJSONLayer({
-        url: fcToBlobUrl(fc),
-        title: "EIP Projects (footprints)",
-        renderer: buildDetailedRenderer(),
-        popupTemplate: buildPopupTemplate(),
-        outFields: ["*"],
-        copyright: "LakeTahoeInfo.org",
-        // Explicit fields — same reason as the points layer (avoid
-        // null-inference dropping fields that filters / renderer use).
-        fields: DETAILED_LAYER_FIELDS,
-        // Drape polygons & lines on terrain in 3D
-        elevationInfo: { mode: "on-the-ground" },
-      });
-      state.detailedLayer = layer;
-      // Insert above the TRPA boundary but below the points (so labels/dots stay on top)
-      const boundaryIdx = state.boundaryLayer
-        ? state.view.map.layers.indexOf(state.boundaryLayer)
-        : -1;
-      const insertAt = boundaryIdx >= 0 ? boundaryIdx + 1 : 0;
-      state.view.map.add(layer, insertAt);
-      state.view.whenLayerView(layer).then(lv => {
-        state.detailedLayerView = lv;
-        applyFilters();
-      });
-    });
   }
 
   // Apply the current selection set as the detailed (footprints) layer
