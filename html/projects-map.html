@@ -1333,20 +1333,37 @@
     return "#" + rgba.slice(0, 3)
       .map(n => Math.round(n).toString(16).padStart(2, "0")).join("");
   }
+  // Maki-style pin with a drop shadow and a radial highlight gradient —
+  // matches LakeTahoeInfo's "lifted" 3D feel. The shadow filter offsets
+  // down-right (light from upper-left), the gradient adds a soft sheen
+  // on the upper-left of the pin so it doesn't read as flat-colored.
   function makiPinDataUrl(hex) {
     const svg =
-      `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="32" viewBox="0 0 22 32">` +
-      `<path d="M11 0 C5 0 0 4.5 0 11 C0 19.5 11 32 11 32 C11 32 22 19.5 22 11 C22 4.5 17 0 11 0 Z" ` +
-      `fill="${hex}" stroke="#FFFFFF" stroke-width="1.5"/>` +
-      `<circle cx="11" cy="11" r="4.2" fill="#FFFFFF"/>` +
+      `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="38" viewBox="0 0 26 38">` +
+        `<defs>` +
+          `<filter id="s" x="-30%" y="-10%" width="160%" height="130%">` +
+            `<feGaussianBlur in="SourceAlpha" stdDeviation="1.2"/>` +
+            `<feOffset dx="1.2" dy="2"/>` +
+            `<feComponentTransfer><feFuncA type="linear" slope="0.45"/></feComponentTransfer>` +
+            `<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>` +
+          `</filter>` +
+          `<radialGradient id="g" cx="35%" cy="30%" r="70%">` +
+            `<stop offset="0%" stop-color="#fff" stop-opacity="0.35"/>` +
+            `<stop offset="55%" stop-color="${hex}" stop-opacity="1"/>` +
+            `<stop offset="100%" stop-color="${hex}" stop-opacity="1"/>` +
+          `</radialGradient>` +
+        `</defs>` +
+        `<path d="M13 1 C6 1 1 5.5 1 12 C1 21 13 35 13 35 C13 35 25 21 25 12 C25 5.5 20 1 13 1 Z" ` +
+          `fill="url(#g)" stroke="#FFFFFF" stroke-width="1.5" filter="url(#s)"/>` +
+        `<circle cx="13" cy="12" r="4.5" fill="#FFFFFF"/>` +
       `</svg>`;
     return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
   }
-  function pointSymbol(rgba, size = 26) {
+  function pointSymbol(rgba, size = 38) {
     return {
       type: "picture-marker",
       url: makiPinDataUrl(rgbaToHex(rgba)),
-      width: Math.round(size * 22 / 32),   // keep pin's 22:32 aspect ratio
+      width: Math.round(size * 26 / 38),   // keep pin's 26:38 aspect ratio (with shadow padding)
       height: size,
       yoffset: size / 2,                   // anchor the tip on the point
     };
