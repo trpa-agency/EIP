@@ -987,7 +987,7 @@
         </div>
         <label class="include-footprints" id="include-footprints-row">
           <input type="checkbox" id="include-footprints" />
-          Include polygons &amp; lines
+          Include detailed geometry
         </label>
         <div class="toggle-status" id="export-target-text">
           Will export 0 features
@@ -1072,31 +1072,31 @@
   <div id="layer-controls" class="layer-controls-panel">
     <div class="section-label" style="margin-bottom:0.6rem;">Map Options</div>
 
-    <label class="toggle-row" for="threed-toggle"
+    <calcite-label layout="inline-space-between" alignment="start"
       title="Switch between a flat 2D map view and a tilted 3D scene over real terrain">
-      <span id="threed-label">3D view</span>
-      <calcite-switch id="threed-toggle" scale="s" aria-labelledby="threed-label"></calcite-switch>
-    </label>
+      3D view
+      <calcite-switch id="threed-toggle" scale="s" label="3D view"></calcite-switch>
+    </calcite-label>
     <div class="toggle-status" id="threed-status">
       2D flat map
     </div>
 
-    <label class="toggle-row" for="cluster-toggle" style="margin-top:0.7rem;"
+    <calcite-label layout="inline-space-between" alignment="start" style="margin-top:0.7rem;"
       title="Group nearby project points into clusters colored by dominant Focus Area">
-      <span id="cluster-label">Cluster points</span>
-      <calcite-switch id="cluster-toggle" scale="s" aria-labelledby="cluster-label"></calcite-switch>
-    </label>
+      Cluster points
+      <calcite-switch id="cluster-toggle" scale="s" label="Cluster points"></calcite-switch>
+    </calcite-label>
     <div class="toggle-status" id="cluster-status">
       Each project as a pin
     </div>
 
-    <label class="toggle-row" for="footprints-toggle" style="margin-top:0.7rem;"
-      title="Lazy-load detailed project footprints (polygons & lines, ~6.8 MB)">
-      <span id="footprints-label">Show polygons &amp; lines</span>
-      <calcite-switch id="footprints-toggle" scale="s" aria-labelledby="footprints-label"></calcite-switch>
-    </label>
+    <calcite-label layout="inline-space-between" alignment="start" style="margin-top:0.7rem;"
+      title="Show the detailed polygons / lines for the projects you've selected">
+      Show detailed geometry
+      <calcite-switch id="footprints-toggle" scale="s" label="Show detailed geometry"></calcite-switch>
+    </calcite-label>
     <div class="toggle-status" id="footprints-status">
-      Polygons &amp; lines hidden
+      Detailed geometry hidden
     </div>
   </div>
 </div>
@@ -1333,20 +1333,37 @@
     return "#" + rgba.slice(0, 3)
       .map(n => Math.round(n).toString(16).padStart(2, "0")).join("");
   }
+  // Maki-style pin with a drop shadow and a radial highlight gradient —
+  // matches LakeTahoeInfo's "lifted" 3D feel. The shadow filter offsets
+  // down-right (light from upper-left), the gradient adds a soft sheen
+  // on the upper-left of the pin so it doesn't read as flat-colored.
   function makiPinDataUrl(hex) {
     const svg =
-      `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="32" viewBox="0 0 22 32">` +
-      `<path d="M11 0 C5 0 0 4.5 0 11 C0 19.5 11 32 11 32 C11 32 22 19.5 22 11 C22 4.5 17 0 11 0 Z" ` +
-      `fill="${hex}" stroke="#FFFFFF" stroke-width="1.5"/>` +
-      `<circle cx="11" cy="11" r="4.2" fill="#FFFFFF"/>` +
+      `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="38" viewBox="0 0 26 38">` +
+        `<defs>` +
+          `<filter id="s" x="-30%" y="-10%" width="160%" height="130%">` +
+            `<feGaussianBlur in="SourceAlpha" stdDeviation="1.2"/>` +
+            `<feOffset dx="1.2" dy="2"/>` +
+            `<feComponentTransfer><feFuncA type="linear" slope="0.45"/></feComponentTransfer>` +
+            `<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>` +
+          `</filter>` +
+          `<radialGradient id="g" cx="35%" cy="30%" r="70%">` +
+            `<stop offset="0%" stop-color="#fff" stop-opacity="0.35"/>` +
+            `<stop offset="55%" stop-color="${hex}" stop-opacity="1"/>` +
+            `<stop offset="100%" stop-color="${hex}" stop-opacity="1"/>` +
+          `</radialGradient>` +
+        `</defs>` +
+        `<path d="M13 1 C6 1 1 5.5 1 12 C1 21 13 35 13 35 C13 35 25 21 25 12 C25 5.5 20 1 13 1 Z" ` +
+          `fill="url(#g)" stroke="#FFFFFF" stroke-width="1.5" filter="url(#s)"/>` +
+        `<circle cx="13" cy="12" r="4.5" fill="#FFFFFF"/>` +
       `</svg>`;
     return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
   }
-  function pointSymbol(rgba, size = 26) {
+  function pointSymbol(rgba, size = 38) {
     return {
       type: "picture-marker",
       url: makiPinDataUrl(rgbaToHex(rgba)),
-      width: Math.round(size * 22 / 32),   // keep pin's 22:32 aspect ratio
+      width: Math.round(size * 26 / 38),   // keep pin's 26:38 aspect ratio (with shadow padding)
       height: size,
       yoffset: size / 2,                   // anchor the tip on the point
     };
@@ -2271,6 +2288,7 @@
         view._eipWidgets.push(fs);
 
         // Calcite reset action (clears filters/selection/popup, recenters)
+        // — anchored bottom-left of the map for both MapView and SceneView
         const resetAction = document.createElement("calcite-action");
         resetAction.setAttribute("icon", "reset");
         resetAction.setAttribute("text", "Reset app");
@@ -2278,7 +2296,7 @@
         resetAction.setAttribute("scale", "s");
         resetAction.style.background = "var(--white)";
         resetAction.addEventListener("click", resetApp);
-        view.ui.add(resetAction, "top-left");
+        view.ui.add(resetAction, "bottom-left");
         view._eipWidgets.push(resetAction);
 
         const scale = new ScaleBar({ view, unit: "imperial" });
@@ -2580,38 +2598,49 @@
     }
 
     state.detailedFeatures = fc.features;
+
+    // Promise-wrap the AMD require so we can `await` the layer module
+    // before continuing — without this, `await ensureDetailedLoaded()`
+    // resolved BEFORE the layer was even created, so caller code calling
+    // updateFootprintsFilter() found state.detailedLayerView still null
+    // and silently skipped applying the filter, leaving the layer to
+    // render its default visible: true with NO filter (= all 8,506
+    // features showing on a single-project click).
+    const GeoJSONLayer = await new Promise(resolve =>
+      require(["esri/layers/GeoJSONLayer"], resolve)
+    );
+    const layer = new GeoJSONLayer({
+      url: fcToBlobUrl(fc),
+      title: "EIP Projects (footprints)",
+      renderer: buildDetailedRenderer(),
+      popupTemplate: buildPopupTemplate(),
+      outFields: ["*"],
+      copyright: "LakeTahoeInfo.org",
+      // Explicit fields — same reason as the points layer (avoid
+      // null-inference dropping fields that filters / renderer use).
+      fields: DETAILED_LAYER_FIELDS,
+      // Drape polygons & lines on terrain in 3D
+      elevationInfo: { mode: "on-the-ground" },
+      // Start hidden — caller flips visible (and applies the
+      // selection-scoped filter) after awaiting this function
+      visible: false,
+    });
+    state.detailedLayer = layer;
+    // Insert above the TRPA boundary but below the points (so dots stay on top)
+    const boundaryIdx = state.boundaryLayer
+      ? state.view.map.layers.indexOf(state.boundaryLayer) : -1;
+    const insertAt = boundaryIdx >= 0 ? boundaryIdx + 1 : 0;
+    state.view.map.add(layer, insertAt);
+
+    // Await the layerView so the caller can immediately apply the
+    // selection-scoped filter via updateFootprintsFilter(). Critical:
+    // sets detailedLayerView BEFORE detailedLoaded so callers using
+    // detailedLoaded as a "ready" signal don't race the filter.
+    state.detailedLayerView = await state.view.whenLayerView(layer);
+
     state.detailedLoaded = true;
-    document.getElementById("footprints-status").textContent =
-      `${fc.features.length.toLocaleString()} footprints on map`;
     document.getElementById("include-footprints-row").removeAttribute("disabled");
     refreshExportTargetText();
-
-    require(["esri/layers/GeoJSONLayer"], GeoJSONLayer => {
-      const layer = new GeoJSONLayer({
-        url: fcToBlobUrl(fc),
-        title: "EIP Projects (footprints)",
-        renderer: buildDetailedRenderer(),
-        popupTemplate: buildPopupTemplate(),
-        outFields: ["*"],
-        copyright: "LakeTahoeInfo.org",
-        // Explicit fields — same reason as the points layer (avoid
-        // null-inference dropping fields that filters / renderer use).
-        fields: DETAILED_LAYER_FIELDS,
-        // Drape polygons & lines on terrain in 3D
-        elevationInfo: { mode: "on-the-ground" },
-      });
-      state.detailedLayer = layer;
-      // Insert above the TRPA boundary but below the points (so labels/dots stay on top)
-      const boundaryIdx = state.boundaryLayer
-        ? state.view.map.layers.indexOf(state.boundaryLayer)
-        : -1;
-      const insertAt = boundaryIdx >= 0 ? boundaryIdx + 1 : 0;
-      state.view.map.add(layer, insertAt);
-      state.view.whenLayerView(layer).then(lv => {
-        state.detailedLayerView = lv;
-        applyFilters();
-      });
-    });
   }
 
   // Apply the current selection set as the detailed (footprints) layer
@@ -2636,11 +2665,11 @@
     const on = sw && sw.checked;
     const n = state.selection.size;
     if (!on) {
-      status.textContent = "Polygons & lines hidden";
+      status.textContent = "Detailed geometry hidden";
     } else if (n === 0) {
-      status.textContent = "On — pick projects to show their footprints";
+      status.textContent = "On — pick projects to show their geometry";
     } else {
-      status.textContent = `Showing footprints for ${n.toLocaleString()} selected project${n === 1 ? "" : "s"}`;
+      status.textContent = `Showing detailed geometry for ${n.toLocaleString()} selected project${n === 1 ? "" : "s"}`;
     }
   }
 
@@ -3068,9 +3097,7 @@
     const ftSw = document.getElementById("footprints-toggle");
     if (ftSw && ftSw.checked) ftSw.checked = false;
     setFootprintsVisible(false);
-    document.getElementById("footprints-status").textContent = state.detailedLoaded
-      ? `${state.detailedFeatures.length.toLocaleString()} footprints hidden`
-      : "Polygons & lines hidden";
+    // status is updated by updateFootprintsStatus() inside setFootprintsVisible
     // Cluster off
     const clSw = document.getElementById("cluster-toggle");
     if (clSw && clSw.checked) clSw.checked = false;
