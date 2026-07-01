@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Locator — Lake Tahoe EIP</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <link rel="apple-touch-icon" href="assets/favicon.png" />
+
+  <!-- Calcite Design System -->
+  <script type="module" src="https://js.arcgis.com/calcite-components/5.0"></script>
+  <link rel="stylesheet" type="text/css" href="https://js.arcgis.com/calcite-components/5.0/calcite.css" />
+
+  <!-- ArcGIS Maps SDK -->
+  <link rel="stylesheet" href="https://js.arcgis.com/4.31/esri/themes/light/main.css" />
+  <script src="https://js.arcgis.com/4.31/"></script>
+
+  <!-- Brand fonts: self-hosted so exports render identically offline. -->
+  <link href="assets/fonts/fonts.css" rel="stylesheet" />
+
+  <style>
+    :root {
+      --brand-primary: #007DC3;
+      --brand-accent:  #F16022;
+      --brand-dark:    #0B1F41;
+      --brand-font:    'Lexend Deca', system-ui, sans-serif;
+      --white: #FFFFFF; --gray-bg: #F5F7FA; --gray-border: #E2E6EC;
+      --shadow: 0 2px 10px rgba(11,31,65,0.18);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    [hidden] { display: none !important; }
+
+    html, body {
+      height: 100%; font-family: var(--brand-font); color: var(--brand-dark);
+      overflow: hidden; background: var(--gray-bg);
+    }
+    body { display: flex; flex-direction: column; height: 100vh; }
+
+    /* ── Header ── */
+    #appHeader {
+      flex: 0 0 auto; display: flex; align-items: center; gap: 1rem;
+      padding: 0.5rem 1rem; background: var(--white);
+      border-bottom: 1px solid var(--gray-border);
+      box-shadow: 0 1px 4px rgba(11,31,65,0.06); z-index: 20; flex-wrap: wrap;
+    }
+    .hdr-brand { display: flex; align-items: center; gap: 0.7rem; flex-shrink: 0; }
+    .hdr-brand img { height: 34px; width: auto; object-fit: contain; }
+    .hdr-brand .htitle { display: flex; flex-direction: column; line-height: 1.1; }
+    .hdr-brand .hagency { font-size: 0.58rem; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--brand-primary); }
+    .hdr-brand .hname { font-size: 0.95rem; font-weight: 700; color: var(--brand-dark); }
+
+    .hdr-search { flex: 1 1 240px; position: relative; min-width: 200px; max-width: 460px; }
+    .search-box {
+      display: flex; align-items: center; gap: 0.5rem; background: var(--gray-bg);
+      border: 1.5px solid var(--gray-border); border-radius: 8px; padding: 0.3rem 0.7rem;
+    }
+    .search-box:focus-within { border-color: var(--brand-primary); background: #fff; }
+    .search-box calcite-icon { color: var(--brand-primary); flex-shrink: 0; }
+    .search-box input { flex: 1; border: none; outline: none; background: transparent;
+      font-family: var(--brand-font); font-size: 0.9rem; color: var(--brand-dark); padding: 0.25rem 0; }
+    .search-box input::placeholder { color: #8A93A3; }
+    .search-clear { border: none; background: transparent; cursor: pointer; color: #8A93A3;
+      padding: 0.2rem; border-radius: 5px; display: none; }
+    .search-clear:hover { background: var(--gray-border); }
+    .suggest-list { position: absolute; top: calc(100% + 5px); left: 0; right: 0; z-index: 60;
+      background: #fff; border-radius: 8px; box-shadow: var(--shadow); overflow: hidden;
+      max-height: 320px; overflow-y: auto; display: none; }
+    .suggest-list.open { display: block; }
+    .suggest-item { padding: 0.55rem 0.85rem; cursor: pointer; border-bottom: 1px solid #eef1f5;
+      display: flex; flex-direction: column; gap: 2px; }
+    .suggest-item:last-child { border-bottom: none; }
+    .suggest-item:hover { background: var(--gray-bg); }
+    .suggest-item .s-primary { font-size: 0.85rem; font-weight: 600; }
+    .suggest-item .s-secondary { font-size: 0.72rem; color: #6B7688; }
+    .suggest-item .s-apn { color: var(--brand-primary); font-weight: 700; }
+    .suggest-empty { padding: 0.7rem 0.85rem; font-size: 0.8rem; color: #6B7688; }
+
+    .hdr-tools { display: flex; align-items: center; gap: 0.55rem; flex-shrink: 0; flex-wrap: wrap; }
+    .seg { display: flex; border-radius: 7px; overflow: hidden; border: 1px solid var(--gray-border); }
+    .seg button { border: none; background: #fff; cursor: pointer; font-family: var(--brand-font);
+      font-size: 0.76rem; font-weight: 600; color: #6B7688; padding: 0.35rem 0.65rem; transition: all 120ms; }
+    .seg button.active { background: var(--brand-primary); color: #fff; }
+    .tool-label { font-size: 0.62rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+      color: #8A93A3; margin-right: 0.15rem; }
+    .cap-toggle { display: flex; align-items: center; gap: 0.35rem; font-size: 0.76rem; color: var(--brand-dark); }
+    select.bm-select { font-family: var(--brand-font); font-size: 0.76rem; font-weight: 600;
+      color: var(--brand-dark); border: 1px solid var(--gray-border); border-radius: 7px;
+      padding: 0.35rem 0.5rem; background: #fff; cursor: pointer; }
+
+    /* Responsive: below 760px, search + tools each take a full row and wrap */
+    @media (max-width: 760px) {
+      #appHeader { gap: 0.6rem; }
+      .hdr-brand .hagency { display: none; }
+      .hdr-brand img { height: 30px; }
+      .hdr-search { flex-basis: 100%; order: 1; }
+      .hdr-tools { flex-basis: 100%; order: 2; justify-content: flex-start; }
+    }
+
+    /* ── Map ── */
+    #mapWrap { flex: 1 1 auto; position: relative; }
+    #viewDiv { position: absolute; inset: 0; }
+
+    .loc-card { position: absolute; bottom: 26px; left: 14px; z-index: 15; background: #fff;
+      border-radius: 10px; box-shadow: var(--shadow); padding: 0.6rem 0.9rem; max-width: 320px;
+      display: none; border-left: 4px solid var(--brand-accent); }
+    .loc-card.show { display: block; }
+    .loc-card .loc-label { font-size: 0.6rem; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--brand-accent); }
+    .loc-card .loc-addr { font-size: 0.92rem; font-weight: 700; margin-top: 2px; }
+    .loc-card .loc-meta { font-size: 0.74rem; color: #6B7688; margin-top: 2px; }
+
+    .toast { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 40;
+      background: var(--brand-dark); color: #fff; padding: 0.5rem 1rem; border-radius: 8px;
+      font-size: 0.82rem; box-shadow: var(--shadow); display: none; }
+    .toast.show { display: block; }
+
+    #basinDiv { position: absolute; left: -10000px; top: 0; width: 900px; height: 600px; }
+  </style>
+</head>
+<body data-brand="eip">
+
+  <!-- ── Header ── -->
+  <header id="appHeader">
+    <div class="hdr-brand">
+      <img id="brandLogo" src="assets/eip-logo.png" alt="Lake Tahoe EIP" />
+      <div class="htitle">
+        <span class="hagency" id="brandAgency">Environmental Improvement Program</span>
+        <span class="hname">Project Locator</span>
+      </div>
+    </div>
+
+    <div class="hdr-search">
+      <div class="search-box">
+        <calcite-icon icon="search" scale="s"></calcite-icon>
+        <input id="searchInput" type="text" autocomplete="off" spellcheck="false"
+               placeholder="Search an address or APN…" />
+        <button class="search-clear" id="searchClear" title="Clear">
+          <calcite-icon icon="x" scale="s"></calcite-icon>
+        </button>
+      </div>
+      <div class="suggest-list" id="suggestList"></div>
+    </div>
+
+    <div class="hdr-tools">
+      <div class="seg" id="brandSeg" title="Brand">
+        <button data-brand="eip" class="active">EIP</button>
+        <button data-brand="trpa">TRPA</button>
+      </div>
+      <select class="bm-select" id="basemapSelect" title="Basemap — used by the split detail map">
+        <option value="terrain">Terrain + Labels</option>
+        <option value="imagery">Imagery + Labels</option>
+        <option value="humangeo">Human Geography</option>
+        <option value="plain">Plain</option>
+      </select>
+      <select class="bm-select" id="scaleSelect" title="Detail zoom for the split layout">
+        <option value="fit">Fit parcel</option>
+        <option value="5000">1:5,000</option>
+        <option value="24000">1:24,000</option>
+        <option value="125000">1:125,000</option>
+      </select>
+      <span class="tool-label">Layout</span>
+      <div class="seg" id="layoutSeg" title="Export layout">
+        <button data-layout="slide" class="active">Slide</button>
+        <button data-layout="split">Split</button>
+        <button data-layout="locator">Locator</button>
+      </div>
+      <label class="cap-toggle" title="Include the branded caption strip in the export">
+        <calcite-switch id="capSwitch" checked scale="s"></calcite-switch> Caption
+      </label>
+      <calcite-button id="exportBtn" icon-start="image" appearance="solid" kind="brand" scale="s">Export PNG</calcite-button>
+    </div>
+  </header>
+
+  <!-- ── Map ── -->
+  <div id="mapWrap">
+    <div id="viewDiv"></div>
+    <div class="loc-card" id="locCard">
+      <div class="loc-label">Location</div>
+      <div class="loc-addr" id="locAddr">—</div>
+      <div class="loc-meta" id="locMeta">—</div>
+    </div>
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <div id="basinDiv"></div>
+
+  <script>
+    // ───────────────────────── Config ─────────────────────────
+    const SVC = "https://maps.trpa.org/server/rest/services/";
+    const PARCELS_URL  = SVC + "Parcels/FeatureServer/0"; // FeatureServer returns geometry
+    const BASIN = { center: [-120.04, 39.09], zoom: 9 };
+
+    const BRANDS = {
+      eip: { agency: "Environmental Improvement Program", exportName: "Lake Tahoe EIP",
+        exportSub: "Environmental Improvement Program", primary: "#007DC3", accent: "#F16022",
+        dark: "#0B1F41", font: "'Lexend Deca', system-ui, sans-serif",
+        logo: "assets/eip-logo.png", pin: "#007DC3", slideLogoH: 100 },
+      trpa: { agency: "Tahoe Regional Planning Agency", exportName: "Tahoe Regional Planning Agency",
+        exportSub: "Lake Tahoe Region", primary: "#0072CE", accent: "#E87722",
+        dark: "#003B71", font: "'Open Sans', system-ui, sans-serif",
+        logo: "assets/trpa-logo.png", pin: "#0072CE", slideLogoH: 150 },
+    };
+    let brandKey = "eip";
+    const brand = () => BRANDS[brandKey];
+    let exportLayout = "slide";   // slide = branded slide, split = 2/3 detail + 1/3 locator
+    const LOGO_CACHE = {};
+
+    // Basemaps for the interactive/split-detail map. Enum strings are keyless Esri
+    // basemaps; the rest load from public ArcGIS Online web-map items.
+    const PORTAL_BM = { terrain: "a52ab98763904006aa382d90e906fdd5",     // Esri "Terrain with Labels"
+                        imagery: "9e557abc61ce41c9b8ec8b15800c20d3",     // Esri "Firefly Imagery Hybrid" (shown as "Imagery + Labels")
+                        humangeo: "3582b744bba84668b52a16b0b6942544" };  // Esri "Human Geography Map"
+    const BM_CACHE = {};
+    function makeBasemap(v) {
+      if (v === "plain") return "gray-vector";    // Light Gray Canvas
+      if (!BM_CACHE[v]) BM_CACHE[v] = new window._Basemap({ portalItem: { id: PORTAL_BM[v] } });
+      return BM_CACHE[v];
+    }
+
+    // Basin locator palette (sampled from the TRPA reference)
+    const BASIN_STYLE = {
+      outside: [11, 31, 65, 0.64], lake: [157, 175, 194, 1], outline: [74, 129, 179, 1],
+      stateln: [124, 124, 124, 0.9], cslt: [150, 160, 172, 0.9], label: "#5C6675",
+    };  // outside mask = EIP navy #0B1F41 @ 64% opacity (36% transparent)
+
+    // ───────── Simple flat teardrop pin (no gloss/shine) ─────────
+    function makiPinDataUrl(hex) {
+      const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="38" viewBox="0 0 26 38">` +
+          `<path d="M13 1 C6 1 1 5.5 1 12 C1 21 13 35 13 35 C13 35 25 21 25 12 C25 5.5 20 1 13 1 Z" ` +
+            `fill="${hex}" stroke="#FFFFFF" stroke-width="1.5"/>` +
+          `<circle cx="13" cy="12" r="4.5" fill="#FFFFFF"/></svg>`;
+      return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+    }
+    function pinSymbol(hex, size = 44) {
+      return { type: "picture-marker", url: makiPinDataUrl(hex),
+        width: Math.round(size * 26 / 38), height: size, yoffset: size / 2 };
+    }
+    function parcelFillSymbol(hex) {
+      return { type: "simple-fill", color: hexA(hex, 0.12), outline: { color: hex, width: 2 } };
+    }
+    function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return [(n>>16)&255,(n>>8)&255,n&255,a]; }
+
+    // ───────────────────────── App ─────────────────────────
+    let map, view, pinLayer, parcelsFL;
+    let basinView, basinPinLayer, basinReady = false;
+    let current = null;
+    // COUNTY code → full name + state (avoids the redundant jurisdiction/"X County" label)
+    const COUNTY_NAMES = { WA: "Washoe County, NV", CC: "Carson City, NV", DG: "Douglas County, NV",
+      EL: "El Dorado County, CA", PL: "Placer County, CA" };
+    function countyLabel() {
+      if (!current || !current.county) return "";
+      return COUNTY_NAMES[current.county] || current.county + " County";
+    }
+    const $ = (id) => document.getElementById(id);
+    function toast(msg, ms = 2200) {
+      const t = $("toast"); t.textContent = msg; t.classList.add("show");
+      clearTimeout(toast._t); if (ms) toast._t = setTimeout(() => t.classList.remove("show"), ms);
+    }
+    // Build the styled locator feature layers (shared shape for map + basin view)
+    function styledLayers(FeatureLayer, opts) {
+      const S = BASIN_STYLE, o = opts || {};
+      const mk = (url, sym) => new FeatureLayer({ url, renderer: { type: "simple", symbol: sym },
+        legendEnabled: false, popupEnabled: false, listMode: "hide", visible: o.visible !== false });
+      const fill = (color, ow, oc) => ({ type: "simple-fill", color, outline: { width: ow, color: oc || [0,0,0,0] } });
+      return {
+        mask:  mk(SVC+"Boundaries/MapServer/15",            fill(S.outside, 0)),
+        lake:  mk(SVC+"Streams_and_Flood_Zone/MapServer/2", fill(S.lake, 0)),
+        juris: mk(SVC+"Boundaries/MapServer/16",            fill([0,0,0,0], 1, S.stateln)),
+        cslt:  mk(SVC+"Boundaries/MapServer/2",             fill([0,0,0,0], 0.7, S.cslt)),
+        bnd:   mk(SVC+"Boundaries/MapServer/4",             fill([0,0,0,0], 3.5, S.outline)),
+      };
+    }
+
+    require([
+      "esri/Map", "esri/views/MapView", "esri/layers/FeatureLayer",
+      "esri/layers/GraphicsLayer", "esri/Graphic", "esri/widgets/ScaleBar",
+      "esri/widgets/Home", "esri/widgets/Sketch", "esri/widgets/Expand",
+      "esri/core/reactiveUtils", "esri/Basemap",
+    ], (Map, MapView, FeatureLayer, GraphicsLayer, Graphic, ScaleBar, Home, Sketch, Expand, reactiveUtils, Basemap) => {
+      window._Graphic = Graphic; window._reactiveUtils = reactiveUtils; window._Basemap = Basemap;
+
+      // The interactive map carries a real basemap (used by the split detail
+      // panel). The styled locator layers live only on the offscreen basin view.
+      parcelsFL = new FeatureLayer({ url: PARCELS_URL,
+        outFields: ["APN","APO_ADDRESS","JURISDICTION","COUNTY"],
+        visible: false, legendEnabled: false, listMode: "hide" });
+      pinLayer = new GraphicsLayer({ listMode: "hide" });
+      const sketchLayer = new GraphicsLayer({ title: "Annotations" });
+
+      map = new Map({ basemap: makeBasemap("terrain"), layers: [parcelsFL, sketchLayer, pinLayer] });
+      view = new MapView({ container: "viewDiv", map, center: BASIN.center, zoom: BASIN.zoom,
+        constraints: { minZoom: 7, maxZoom: 20, snapToZoom: false }, ui: { components: ["zoom"] },
+        popup: { autoOpenEnabled: false } });
+
+      view.when(() => {
+        view.ui.move("zoom", "top-left");
+        view.ui.add(new Home({ view }), "top-left");
+        view.ui.add(new ScaleBar({ view, unit: "dual" }), "bottom-left");
+        const sketch = new Sketch({ view, layer: sketchLayer, creationMode: "update",
+          layout: "vertical", visibleElements: { settingsMenu: false } });
+        const sketchExpand = new Expand({ view, content: sketch, expandIcon: "pencil",
+          expandTooltip: "Draw / annotate", collapseTooltip: "Close draw tools" });
+        view.ui.add(sketchExpand, "top-right");
+        applyBrand();
+      });
+
+      buildBasin(Map, MapView, FeatureLayer, GraphicsLayer);
+    });
+
+    function buildBasin(Map, MapView, FeatureLayer, GraphicsLayer) {
+      const s = styledLayers(FeatureLayer, { visible: true });
+      basinPinLayer = new GraphicsLayer({ listMode: "hide" });
+      const bmap = new Map({ basemap: null, layers: [s.mask, s.lake, s.juris, s.cslt, s.bnd, basinPinLayer] });
+      basinView = new MapView({ container: "basinDiv", map: bmap, background: { color: [255,255,255,1] },
+        constraints: { snapToZoom: false, rotationEnabled: false }, ui: { components: [] } });
+      basinView.when(async () => {
+        await s.bnd.when();
+        basinView._basinExtent = s.bnd.fullExtent.clone().expand(1.06);
+        await basinView.goTo(basinView._basinExtent, { animate: false });
+        basinReady = true;
+      });
+    }
+    function updateBasinPin() {
+      if (!basinPinLayer || !window._Graphic) return;
+      basinPinLayer.removeAll();
+      if (current) basinPinLayer.add(new window._Graphic({ geometry: current.point, symbol: pinSymbol(brand().pin, 46) }));
+    }
+
+    // ───────────── Search + suggestions ─────────────
+    const input = $("searchInput"), list = $("suggestList"), clearBtn = $("searchClear");
+    let suggestGraphics = [], debounceT = null;
+    const escSql = (s) => s.replace(/'/g, "''");
+
+    async function runSuggest(termRaw) {
+      const term = termRaw.trim();
+      if (term.length < 3 || !parcelsFL) { closeSuggest(); return; }
+      const t = escSql(term.toUpperCase());
+      const clauses = [`UPPER(APO_ADDRESS) LIKE '%${t}%'`, `UPPER(APN) LIKE '${t}%'`];
+      if (/^\d{4,}$/.test(term)) clauses.push(`APN LIKE '${term.split("").join("%")}%'`);
+      try {
+        const res = await parcelsFL.queryFeatures({ where: clauses.join(" OR "),
+          outFields: ["APN","APO_ADDRESS","JURISDICTION","COUNTY"], returnGeometry: true,
+          outSpatialReference: view.spatialReference, num: 8, orderByFields: ["APO_ADDRESS ASC"] });
+        suggestGraphics = res.features; renderSuggest(term);
+      } catch (e) { console.error(e);
+        list.innerHTML = `<div class="suggest-empty">Search error — check the connection.</div>`; list.classList.add("open"); }
+    }
+    function renderSuggest(term) {
+      if (!suggestGraphics.length) {
+        list.innerHTML = `<div class="suggest-empty">No parcels match “${term}”.</div>`; list.classList.add("open"); return; }
+      list.innerHTML = suggestGraphics.map((g, i) => {
+        const a = g.attributes, addr = a.APO_ADDRESS || "(no address on file)";
+        const juris = [a.JURISDICTION, a.COUNTY].filter(Boolean).join(" · ");
+        return `<div class="suggest-item" data-i="${i}"><span class="s-primary">${addr}</span>
+          <span class="s-secondary">APN <span class="s-apn">${a.APN || "—"}</span>${juris ? " · " + juris : ""}</span></div>`;
+      }).join("");
+      list.classList.add("open");
+      list.querySelectorAll(".suggest-item").forEach(el =>
+        el.addEventListener("click", () => selectResult(suggestGraphics[+el.dataset.i])));
+    }
+    function closeSuggest() { list.classList.remove("open"); list.innerHTML = ""; }
+
+    function selectResult(g) {
+      closeSuggest();
+      const a = g.attributes, geom = g.geometry;
+      if (!geom) { toast("No geometry for this parcel."); return; }
+      const pt = geom.extent ? geom.extent.center : geom;
+      current = { apn: a.APN || "—", address: a.APO_ADDRESS || "(no address on file)",
+        jurisdiction: a.JURISDICTION || "", county: a.COUNTY || "", geometry: geom, point: pt };
+      input.value = a.APO_ADDRESS || a.APN || "";
+      drawResult(); updateLocCard();
+      view.goTo({ target: geom.extent ? geom.extent.expand(2.2) : { center: pt, zoom: 17 } }, { duration: 550 });
+    }
+    function drawResult() {
+      if (!pinLayer || !current) return;
+      const G = window._Graphic; pinLayer.removeAll();
+      if (current.geometry.extent) pinLayer.add(new G({ geometry: current.geometry, symbol: parcelFillSymbol(brand().accent) }));
+      pinLayer.add(new G({ geometry: current.point, symbol: pinSymbol(brand().pin) }));
+      updateBasinPin();
+    }
+    function updateLocCard() {
+      if (!current) { $("locCard").classList.remove("show"); return; }
+      $("locAddr").textContent = current.address;
+      $("locMeta").textContent = [`APN ${current.apn}`, countyLabel()].filter(Boolean).join("  ·  ");
+      $("locCard").classList.add("show");
+    }
+    input.addEventListener("input", () => {
+      clearBtn.style.display = input.value ? "block" : "none";
+      clearTimeout(debounceT); debounceT = setTimeout(() => runSuggest(input.value), 220);
+    });
+    input.addEventListener("focus", () => { if (suggestGraphics.length && input.value.length >= 3) list.classList.add("open"); });
+    clearBtn.addEventListener("click", () => {
+      input.value = ""; clearBtn.style.display = "none"; closeSuggest();
+      suggestGraphics = []; current = null;
+      if (pinLayer) pinLayer.removeAll(); if (basinPinLayer) basinPinLayer.removeAll();
+      $("locCard").classList.remove("show");
+      view.goTo({ center: BASIN.center, zoom: BASIN.zoom }, { duration: 500 });
+    });
+    document.addEventListener("click", (e) => { if (!e.target.closest(".hdr-search")) closeSuggest(); });
+
+    // ───────────── Header controls ─────────────
+    function applyBrand() {
+      const b = brand(); document.body.dataset.brand = brandKey;
+      const r = document.documentElement.style;
+      r.setProperty("--brand-primary", b.primary); r.setProperty("--brand-accent", b.accent);
+      r.setProperty("--brand-dark", b.dark); r.setProperty("--brand-font", b.font);
+      getLogo().then(im => { if (im && im._durl) $("brandLogo").src = im._durl; });
+      $("brandAgency").textContent = b.agency;
+      $("brandSeg").querySelectorAll("button").forEach(btn => btn.classList.toggle("active", btn.dataset.brand === brandKey));
+      if (current) drawResult(); updateLocCard();
+    }
+    $("brandSeg").addEventListener("click", (e) => {
+      const btn = e.target.closest("button"); if (!btn) return; brandKey = btn.dataset.brand; applyBrand();
+    });
+    $("layoutSeg").addEventListener("click", (e) => {
+      const btn = e.target.closest("button"); if (!btn) return; exportLayout = btn.dataset.layout;
+      $("layoutSeg").querySelectorAll("button").forEach(x => x.classList.toggle("active", x === btn));
+    });
+    $("basemapSelect").addEventListener("change", (e) => {
+      map.basemap = makeBasemap(e.target.value);
+    });
+    // Detail-map zoom: "fit" frames the parcel; a scale value zooms to that fixed scale on the pin.
+    $("scaleSelect").addEventListener("change", (e) => {
+      const v = e.target.value, target = current ? current.point : view.center;
+      if (v === "fit") {
+        if (current && current.geometry.extent) view.goTo({ target: current.geometry.extent.expand(2.2) }, { duration: 500 });
+        else view.goTo({ target, zoom: 17 }, { duration: 500 });
+      } else {
+        view.goTo({ target, scale: +v }, { duration: 500 });
+      }
+    });
+
+    // ───────────── Export ─────────────
+    function loadImage(src) { return new Promise((res, rej) => { const im = new Image();
+      im.onload = () => res(im); im.onerror = () => rej(new Error("img " + src)); im.src = src; }); }
+    // The brand logo PNGs ship with a baked-in opaque BLACK background; content is
+    // never pure black, so we key near-black pixels to transparent at load time.
+    function keyBlack(img) {
+      const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      const x = c.getContext("2d"); x.drawImage(img, 0, 0);
+      const d = x.getImageData(0, 0, w, h), p = d.data;
+      for (let i = 0; i < p.length; i += 4)
+        if (p[i] < 18 && p[i+1] < 18 && p[i+2] < 18) p[i+3] = 0;
+      x.putImageData(d, 0, 0); return c;
+    }
+    function getLogo() {
+      const src = brand().logo;
+      if (!LOGO_CACHE[src]) LOGO_CACHE[src] = (async () => {
+        const img = await loadImage(src).catch(() => null); if (!img) return null;
+        const durl = keyBlack(img).toDataURL("image/png");
+        const out = await loadImage(durl); out._durl = durl; return out;
+      })();
+      return LOGO_CACHE[src];
+    }
+    const rgba = (a) => `rgba(${a[0]},${a[1]},${a[2]},${a[3]})`;
+    const baseFont = () => brand().font.split(",")[0].replace(/'/g, "") + ", sans-serif";
+    const today = () => new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+    async function settle(v, ms = 3500) {
+      if (v && v.updating && window._reactiveUtils)
+        await Promise.race([window._reactiveUtils.whenOnce(() => !v.updating), new Promise(r => setTimeout(r, ms))]);
+    }
+    // Resize the offscreen basin view to the target aspect, refit, and screenshot at 2×.
+    async function shotBasin(wPx, hPx) {
+      const d = $("basinDiv"); d.style.width = wPx + "px"; d.style.height = hPx + "px";
+      // Wait until the view actually adopts the new container size (ResizeObserver is async)…
+      for (let i = 0; i < 25 && Math.abs(basinView.width - wPx) > 2; i++)
+        await new Promise(r => setTimeout(r, 100));
+      await basinView.goTo(basinView._basinExtent, { animate: false }).catch(() => {});
+      await settle(basinView, 4000);
+      await new Promise(r => setTimeout(r, 200));   // let the final frame paint
+      const s = await basinView.takeScreenshot({ width: wPx * 2, height: hPx * 2, format: "png" });
+      return loadImage(s.dataUrl);
+    }
+    async function shotZoom(aspect) {
+      await settle(view, 3000);
+      const vw = view.width, vh = view.height; let aw, ah;
+      if (vw / vh > aspect) { ah = vh; aw = ah * aspect; } else { aw = vw; ah = aw / aspect; }
+      const outH = 1300, outW = Math.round(outH * aspect);
+      const s = await view.takeScreenshot({ area: { x: (vw-aw)/2, y: (vh-ah)/2, width: aw, height: ah },
+        width: outW, height: outH, format: "png" });
+      return loadImage(s.dataUrl);
+    }
+    function drawLogo(ctx, img, x, y, h) { if (!img) return 0; const w = img.width*(h/img.height); ctx.drawImage(img, x, y, w, h); return w; }
+    function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x+r,y);
+      ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+    // North arrow = Calcite "compass-north-circle" icon, filled brand blue.
+    const NORTH_PATH = "m16 5.5-8 18 8-4 8 4zm0 13a1 1 0 0 0-.447.105l-5.507 2.754L16 7.962l5.954 13.397-5.507-2.754A1 1 0 0 0 16 18.5m0-16.3A13.8 13.8 0 1 0 29.8 16 13.815 13.815 0 0 0 16 2.2m0 26.6A12.8 12.8 0 1 1 28.8 16 12.815 12.815 0 0 1 16 28.8";
+    const NORTH_CACHE = {};
+    function northImg(hex) {
+      if (!NORTH_CACHE[hex]) {
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="${hex}" d="${NORTH_PATH}"/></svg>`;
+        NORTH_CACHE[hex] = loadImage("data:image/svg+xml;utf8," + encodeURIComponent(svg));
+      }
+      return NORTH_CACHE[hex];
+    }
+    async function drawNorthArrow(ctx, cx, cy, size, hex) {
+      const img = await northImg(hex);
+      // white disc behind the icon so the dark arrow reads on the navy mask
+      ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, size*0.46, 0, Math.PI*2);
+      ctx.fillStyle = "rgba(255,255,255,0.92)"; ctx.fill(); ctx.restore();
+      ctx.drawImage(img, cx - size/2, cy - size/2, size, size);
+    }
+    // LOCATION card, anchored bottom-left at (x, yBottom); auto-sizes to the text.
+    function drawLocationCard(ctx, x, yBottom, s) {
+      if (!current) return; const b = brand();
+      const fsL = 26*s, fsA = 44*s, fsM = 28*s, pad = 34*s, bar = 9*s;
+      const metaText = `APN ${current.apn}${countyLabel() ? "  ·  "+countyLabel() : ""}`;
+      ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+      ctx.font = `700 ${fsA}px ${baseFont()}`; const wA = ctx.measureText(current.address).width;
+      ctx.font = `400 ${fsM}px ${baseFont()}`; const wM = ctx.measureText(metaText).width;
+      const w = Math.max(wA, wM) + bar + pad*2;
+      const h = pad*2 + fsL + fsA*1.05 + fsM*1.15;
+      const y = yBottom - h;
+      ctx.save(); ctx.shadowColor = "rgba(11,31,65,0.22)"; ctx.shadowBlur = 22*s; ctx.shadowOffsetY = 6*s;
+      ctx.fillStyle = "#fff"; roundRect(ctx, x, y, w, h, 14*s); ctx.fill(); ctx.restore();
+      ctx.fillStyle = b.accent; roundRect(ctx, x, y, bar, h, 4*s); ctx.fill();
+      const tx = x + bar + pad;
+      let cy = y + pad + fsL*0.85;
+      ctx.fillStyle = b.accent; ctx.font = `700 ${fsL}px ${baseFont()}`; ctx.fillText("LOCATION", tx, cy);
+      cy += fsA*1.02;
+      ctx.fillStyle = b.dark; ctx.font = `700 ${fsA}px ${baseFont()}`; ctx.fillText(current.address, tx, cy);
+      cy += fsM*1.3;
+      ctx.fillStyle = "#6B7688"; ctx.font = `400 ${fsM}px ${baseFont()}`; ctx.fillText(metaText, tx, cy);
+    }
+    async function drawCaption(ctx, x, y, w, h, showAddress = true) {
+      const b = brand(); ctx.fillStyle = "#fff"; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = b.primary; ctx.fillRect(x, y, w, Math.max(4, Math.round(h*0.05)));
+      const logo = await getLogo(); const pad = Math.round(h*0.22);
+      const logoW = drawLogo(ctx, logo, x+pad, y+pad*1.1, h*0.5);
+      const tx = x + pad + (logoW ? logoW + pad*0.8 : 0);
+      ctx.textBaseline = "middle"; ctx.textAlign = "left";
+      if (showAddress && current) {   // Split omits this (the LOCATION card already shows it)
+        ctx.fillStyle = b.dark; ctx.font = `700 ${Math.round(h*0.26)}px ${baseFont()}`;
+        ctx.fillText(current.address, tx, y + h*0.42);
+        ctx.fillStyle = "#6B7688"; ctx.font = `400 ${Math.round(h*0.17)}px ${baseFont()}`;
+        ctx.fillText(`APN ${current.apn}${countyLabel() ? "   ·   "+countyLabel() : ""}`, tx, y + h*0.72);
+      } else if (!current) {
+        ctx.fillStyle = b.dark; ctx.font = `700 ${Math.round(h*0.26)}px ${baseFont()}`;
+        ctx.fillText(b.exportName, tx, y + h*0.5);
+      }
+    }
+
+    // Slide — branded presentation slide: logo + title block | basin locator (16:9)
+    async function composeSlide(caption) {
+      const W = 2400, H = 1350, b = brand();
+      const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+      const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0,0,W,H);
+      const M = 90;   // 0.5" at 180px/in — equal map margins top/right/bottom
+      const mp = { x: 2400 - M - 960, y: M, w: 960, h: H - 2*M };   // 1350, 90, 960, 1170
+      const basin = await shotBasin(Math.round(mp.w*0.72), Math.round(mp.h*0.72));
+      ctx.fillStyle = rgba(BASIN_STYLE.outside); ctx.fillRect(mp.x, mp.y, mp.w, mp.h);
+      if (basin) ctx.drawImage(basin, mp.x, mp.y, mp.w, mp.h);
+      await drawNorthArrow(ctx, mp.x+mp.w-64, mp.y+mp.h-64, 84, b.dark);
+      const logo = await getLogo(); drawLogo(ctx, logo, 150, 130, brand().slideLogoH || 130);
+      ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+      if (caption && current) {
+        ctx.fillStyle = b.dark; ctx.font = `700 92px ${baseFont()}`; ctx.fillText(current.address, 150, 640);
+        ctx.fillStyle = "#6B7688"; ctx.font = `400 46px ${baseFont()}`;
+        ctx.fillText(`APN ${current.apn}${countyLabel() ? "   ·   "+countyLabel() : ""}`, 150, 710);
+      }
+      // accent line: from the title's left edge across to the map's right edge, at the map's bottom
+      ctx.fillStyle = b.primary; ctx.fillRect(150, mp.y + mp.h - 6, (mp.x + mp.w) - 150, 6);
+      return cv;
+    }
+    // Locator — portrait 8.5×11 Tahoe basin, styled, with pin
+    async function composeLocator(caption) {
+      const W = 1700, H = 2200, b = brand();
+      const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+      const ctx = cv.getContext("2d"); ctx.fillStyle = rgba(BASIN_STYLE.outside); ctx.fillRect(0,0,W,H);
+      const capH = caption ? Math.round(H*0.085) : 0, mapH = H - capH;
+      const basin = await shotBasin(850, Math.round(850*mapH/W));
+      if (basin) ctx.drawImage(basin, 0, 0, W, mapH);
+      await drawNorthArrow(ctx, W-96, mapH-96, 100, b.dark);
+      if (caption) await drawCaption(ctx, 0, mapH, W, capH);
+      return cv;
+    }
+    // Split — 2/3 zoomed parcel detail | 1/3 basin locator (16:9)
+    async function composeSplit(caption) {
+      const W = 2400, H = 1350, b = brand();
+      const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+      const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0,0,W,H);
+      const capH = caption ? Math.round(H*0.11) : 0, mapH = H - capH;
+      const leftW = Math.round(W*2/3), rightW = W - leftW;
+      const [zoom, basin] = await Promise.all([
+        shotZoom(leftW/mapH), shotBasin(Math.round(rightW*0.6), Math.round(mapH*0.6)) ]);
+      if (zoom) ctx.drawImage(zoom, 0, 0, leftW, mapH);
+      ctx.fillStyle = rgba(BASIN_STYLE.outside); ctx.fillRect(leftW, 0, rightW, mapH);
+      if (basin) ctx.drawImage(basin, leftW, 0, rightW, mapH);
+      ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.fillRect(leftW-2, 0, 4, mapH);
+      await drawNorthArrow(ctx, W-64, mapH-64, 80, b.dark);
+      drawLocationCard(ctx, 44, mapH - 44, 1.15);
+      if (caption) await drawCaption(ctx, 0, mapH, W, capH, false);  // address is on the LOCATION card
+      return cv;
+    }
+
+    async function exportPng() {
+      if (!view) return;
+      if (!basinReady) { toast("Basin map still loading — try again in a moment."); return; }
+      toast("Rendering PNG…", 0);
+      try {
+        if (document.fonts) { const fam = brand().font.split(",")[0].replace(/'/g,"").trim();
+          await Promise.all([400,600,700].map(w => document.fonts.load(`${w} 40px '${fam}'`))).catch(()=>{}); }
+        updateBasinPin();
+        const caption = $("capSwitch").checked;
+        const cv = exportLayout === "split" ? await composeSplit(caption)
+                 : exportLayout === "locator" ? await composeLocator(caption)
+                 : await composeSlide(caption);
+        const url = cv.toDataURL("image/png"); const a = document.createElement("a");
+        const slug = (current?.apn || current?.address || "locator").toString().replace(/[^\w]+/g,"-").replace(/^-|-$/g,"").slice(0,40) || "locator";
+        const name = exportLayout;
+        a.href = url; a.download = `${brandKey}-${name}-${slug}.png`;
+        document.body.appendChild(a); a.click(); a.remove(); toast("PNG downloaded.");
+      } catch (e) { console.error(e); toast("Export failed — see console."); }
+    }
+    $("exportBtn").addEventListener("click", exportPng);
+  </script>
+</body>
+</html>
