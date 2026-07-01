@@ -70,7 +70,7 @@
     .suggest-item { padding: 0.55rem 0.85rem; cursor: pointer; border-bottom: 1px solid #eef1f5;
       display: flex; flex-direction: column; gap: 2px; }
     .suggest-item:last-child { border-bottom: none; }
-    .suggest-item:hover { background: var(--gray-bg); }
+    .suggest-item:hover, .suggest-item.active { background: var(--gray-bg); }
     .suggest-item .s-primary { font-size: 0.85rem; font-weight: 600; }
     .suggest-item .s-secondary { font-size: 0.72rem; color: #6B7688; }
     .suggest-item .s-apn { color: var(--brand-primary); font-weight: 700; }
@@ -87,6 +87,15 @@
     select.bm-select { font-family: var(--brand-font); font-size: 0.76rem; font-weight: 600;
       color: var(--brand-dark); border: 1px solid var(--gray-border); border-radius: 7px;
       padding: 0.35rem 0.5rem; background: #fff; cursor: pointer; }
+
+    /* Info modal content */
+    .info-content { font-size: 0.88rem; line-height: 1.55; color: var(--brand-dark); }
+    .info-content p { margin: 0 0 0.7rem; }
+    .info-content ol { margin: 0 0 0.7rem; padding-left: 1.2rem; display: grid; gap: 0.45rem; }
+    .info-content .info-fine { font-size: 0.74rem; color: #6B7688; margin-bottom: 0; }
+
+    /* Added-locations chip row (wraps onto its own header line when present) */
+    #locChips { flex-basis: 100%; order: 5; display: flex; flex-wrap: wrap; gap: 0.35rem; }
 
     /* Responsive: below 760px, search + tools each take a full row and wrap */
     @media (max-width: 760px) {
@@ -109,6 +118,10 @@
       text-transform: uppercase; color: var(--brand-accent); }
     .loc-card .loc-addr { font-size: 0.92rem; font-weight: 700; margin-top: 2px; }
     .loc-card .loc-meta { font-size: 0.74rem; color: #6B7688; margin-top: 2px; }
+
+    /* Freeze header controls while an export renders (the active button shows a spinner) */
+    body.exporting .hdr-tools > :not(#exportBtn):not(#copyBtn),
+    body.exporting .hdr-search { pointer-events: none; opacity: 0.55; }
 
     .toast { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 40;
       background: var(--brand-dark); color: #fff; padding: 0.5rem 1rem; border-radius: 8px;
@@ -134,13 +147,18 @@
       <div class="search-box">
         <calcite-icon icon="search" scale="s"></calcite-icon>
         <input id="searchInput" type="text" autocomplete="off" spellcheck="false"
-               placeholder="Search an address or APN…" />
-        <button class="search-clear" id="searchClear" title="Clear">
+               placeholder="Search an address or APN…"
+               role="combobox" aria-label="Search an address or APN"
+               aria-autocomplete="list" aria-expanded="false" aria-controls="suggestList" />
+        <button class="search-clear" id="searchClear" title="Clear" aria-label="Clear search">
           <calcite-icon icon="x" scale="s"></calcite-icon>
         </button>
       </div>
-      <div class="suggest-list" id="suggestList"></div>
+      <div class="suggest-list" id="suggestList" role="listbox" aria-label="Parcel suggestions"></div>
     </div>
+
+    <!-- Added project locations (chips with remove) -->
+    <div id="locChips" aria-label="Added locations" hidden></div>
 
     <div class="hdr-tools">
       <div class="seg" id="brandSeg" title="Brand">
@@ -168,7 +186,15 @@
       <label class="cap-toggle" title="Include the branded caption strip in the export">
         <calcite-switch id="capSwitch" checked scale="s"></calcite-switch> Caption
       </label>
-      <calcite-button id="exportBtn" icon-start="image" appearance="solid" kind="brand" scale="s">Export PNG</calcite-button>
+      <select class="bm-select" id="formatSelect" title="Export format">
+        <option value="png">PNG</option>
+        <option value="pptx">PPTX</option>
+      </select>
+      <calcite-button id="copyBtn" icon-start="copy-to-clipboard" appearance="outline" kind="brand" scale="s" disabled
+        title="Copy image to clipboard" label="Copy image to clipboard"></calcite-button>
+      <calcite-button id="exportBtn" icon-start="download" appearance="solid" kind="brand" scale="s" disabled>Export</calcite-button>
+      <calcite-button id="infoBtn" icon-start="information" appearance="transparent" kind="neutral" scale="s"
+        title="About this tool" label="About this tool"></calcite-button>
     </div>
   </header>
 
@@ -184,6 +210,27 @@
   </div>
 
   <div id="basinDiv"></div>
+
+  <!-- ── Info / help dialog ── -->
+  <calcite-dialog id="infoModal" modal heading="Project Locator" width-scale="s">
+    <div class="info-content">
+      <p>Make consistent, branded <strong>EIP</strong> or <strong>TRPA</strong> locator maps of
+        project locations for presentations and reports.</p>
+      <ol>
+        <li><strong>Search</strong> an address or APN and pick a result — repeat to add up to
+          9 locations (numbered pins). Remove one with its chip, or clear the search to start over.</li>
+        <li><strong>Set the detail view</strong> — basemap and zoom control the Split layout's
+          close-up panel. The draw tools (pencil, top-right of the map) add annotations that
+          appear in that panel too.</li>
+        <li><strong>Pick brand and layout</strong> — EIP or TRPA; <em>Slide</em> (16:9 title slide),
+          <em>Split</em> (16:9, close-up beside the basin locator), or <em>Locator</em>
+          (8.5×11 portrait basin map). Toggle <em>Caption</em> for the branded text strip.</li>
+        <li><strong>Export</strong> — PNG or PowerPoint (.pptx), or copy the image straight to
+          the clipboard and paste onto a slide.</li>
+      </ol>
+      <p class="info-fine">Parcel data: TRPA GIS · Home button returns to the Tahoe Basin.</p>
+    </div>
+  </calcite-dialog>
 
   <script>
     // ───────────────────────── Config ─────────────────────────
@@ -221,20 +268,35 @@
     // Basin locator palette (sampled from the TRPA reference)
     const BASIN_STYLE = {
       outside: [11, 31, 65, 0.64], lake: [157, 175, 194, 1], outline: [74, 129, 179, 1],
-      stateln: [124, 124, 124, 0.9], cslt: [150, 160, 172, 0.9], label: "#5C6675",
+      stateln: [124, 124, 124, 0.9], cslt: [150, 160, 172, 0.9],
     };  // outside mask = EIP navy #0B1F41 @ 64% opacity (36% transparent)
 
+    // Export canvas geometry — one source of truth for all layouts.
+    // 16:9 canvases are 180 px/in on a 13.33×7.5 in slide; portrait is 200 px/in letter.
+    const EXPORT = {
+      slide:   { W: 2400, H: 1350, margin: 90,  pinH: 74,  arrow: 84 },   // margin = 0.5" at 180px/in
+      locator: { W: 1700, H: 2200, capFrac: 0.085, pinH: 104, arrow: 100 },
+      split:   { W: 2400, H: 1350, capFrac: 0.11, pinHZoom: 88, pinHBasin: 58, arrow: 80 },
+      zoomOutH: 1300,           // detail-panel screenshot height (px)
+      basinShot2x: 2,           // basin screenshots render at 2× then downscale
+    };
+
     // ───────── Simple flat teardrop pin (no gloss/shine) ─────────
-    function makiPinDataUrl(hex) {
+    // With `num` (multi-location mode) the white dot becomes a white number.
+    function makiPinDataUrl(hex, num) {
+      const head = num != null
+        ? `<text x="13" y="16" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="700" fill="#FFFFFF">${num}</text>`
+        : `<circle cx="13" cy="12" r="4.5" fill="#FFFFFF"/>`;
       const svg =
         `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="38" viewBox="0 0 26 38">` +
           `<path d="M13 1 C6 1 1 5.5 1 12 C1 21 13 35 13 35 C13 35 25 21 25 12 C25 5.5 20 1 13 1 Z" ` +
             `fill="${hex}" stroke="#FFFFFF" stroke-width="1.5"/>` +
-          `<circle cx="13" cy="12" r="4.5" fill="#FFFFFF"/></svg>`;
+          head + `</svg>`;
       return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
     }
-    function pinSymbol(hex, size = 44) {
-      return { type: "picture-marker", url: makiPinDataUrl(hex),
+    function pinSymbol(hex, num) {
+      const size = 44;   // interactive-map pin height (exports draw their own vector pins)
+      return { type: "picture-marker", url: makiPinDataUrl(hex, num),
         width: Math.round(size * 26 / 38), height: size, yoffset: size / 2 };
     }
     function parcelFillSymbol(hex) {
@@ -244,25 +306,27 @@
 
     // ───────────────────────── App ─────────────────────────
     let map, view, pinLayer, mapPinLayer, parcelsFL;
-    let basinView, basinPinLayer, basinReady = false;
-    let current = null;
+    let basinView, basinReady = false;
+    let locations = [];                 // selected parcels: {apn, address, jurisdiction, county, geometry, point}
+    const MAX_LOCATIONS = 9;            // single-digit pin numbers stay legible
+    const loc0 = () => locations[0] || null;
     // COUNTY code → full name + state (avoids the redundant jurisdiction/"X County" label)
     const COUNTY_NAMES = { WA: "Washoe County, NV", CC: "Carson City, NV", DG: "Douglas County, NV",
       EL: "El Dorado County, CA", PL: "Placer County, CA" };
-    function countyLabel() {
-      if (!current || !current.county) return "";
-      return COUNTY_NAMES[current.county] || current.county + " County";
+    function countyLabel(loc) {
+      if (!loc || !loc.county) return "";
+      return COUNTY_NAMES[loc.county] || loc.county + " County";
     }
     const $ = (id) => document.getElementById(id);
     function toast(msg, ms = 2200) {
       const t = $("toast"); t.textContent = msg; t.classList.add("show");
       clearTimeout(toast._t); if (ms) toast._t = setTimeout(() => t.classList.remove("show"), ms);
     }
-    // Build the styled locator feature layers (shared shape for map + basin view)
-    function styledLayers(FeatureLayer, opts) {
-      const S = BASIN_STYLE, o = opts || {};
+    // Build the styled locator feature layers (used only by the offscreen basin view)
+    function basinLayers(FeatureLayer) {
+      const S = BASIN_STYLE;
       const mk = (url, sym) => new FeatureLayer({ url, renderer: { type: "simple", symbol: sym },
-        legendEnabled: false, popupEnabled: false, listMode: "hide", visible: o.visible !== false });
+        legendEnabled: false, popupEnabled: false, listMode: "hide" });
       const fill = (color, ow, oc) => ({ type: "simple-fill", color, outline: { width: ow, color: oc || [0,0,0,0] } });
       return {
         mask:  mk(SVC+"Boundaries/MapServer/15",            fill(S.outside, 0)),
@@ -277,9 +341,10 @@
       "esri/Map", "esri/views/MapView", "esri/layers/FeatureLayer",
       "esri/layers/GraphicsLayer", "esri/Graphic", "esri/widgets/ScaleBar",
       "esri/widgets/Home", "esri/widgets/Sketch", "esri/widgets/Expand",
-      "esri/core/reactiveUtils", "esri/Basemap",
-    ], (Map, MapView, FeatureLayer, GraphicsLayer, Graphic, ScaleBar, Home, Sketch, Expand, reactiveUtils, Basemap) => {
+      "esri/core/reactiveUtils", "esri/Basemap", "esri/geometry/Extent",
+    ], (Map, MapView, FeatureLayer, GraphicsLayer, Graphic, ScaleBar, Home, Sketch, Expand, reactiveUtils, Basemap, Extent) => {
       window._Graphic = Graphic; window._reactiveUtils = reactiveUtils; window._Basemap = Basemap;
+      window._Extent = Extent;
 
       // The interactive map carries a real basemap (used by the split detail
       // panel). The styled locator layers live only on the offscreen basin view.
@@ -307,13 +372,12 @@
         applyBrand();
       });
 
-      buildBasin(Map, MapView, FeatureLayer, GraphicsLayer);
+      buildBasin(Map, MapView, FeatureLayer);
     });
 
-    function buildBasin(Map, MapView, FeatureLayer, GraphicsLayer) {
-      const s = styledLayers(FeatureLayer, { visible: true });
-      basinPinLayer = new GraphicsLayer({ listMode: "hide" });
-      const bmap = new Map({ basemap: null, layers: [s.mask, s.lake, s.juris, s.cslt, s.bnd, basinPinLayer] });
+    function buildBasin(Map, MapView, FeatureLayer) {
+      const s = basinLayers(FeatureLayer);
+      const bmap = new Map({ basemap: null, layers: [s.mask, s.lake, s.juris, s.cslt, s.bnd] });
       basinView = new MapView({ container: "basinDiv", map: bmap, background: { color: [255,255,255,1] },
         constraints: { snapToZoom: false, rotationEnabled: false }, ui: { components: [] } });
       basinView.when(async () => {
@@ -321,71 +385,187 @@
         basinView._basinExtent = s.bnd.fullExtent.clone().expand(1.06);
         await basinView.goTo(basinView._basinExtent, { animate: false });
         basinReady = true;
+        $("exportBtn").disabled = false;
+        $("copyBtn").disabled = false;
+      }).catch((e) => {
+        console.error("Basin locator failed to load:", e);
+        toast("Basin locator map failed to load — exports unavailable. Reload to retry.", 6000);
       });
-    }
-    function updateBasinPin() {
-      // The basin pin is drawn as a crisp vector on the export canvas (drawPin),
-      // not as a raster picture-marker, so keep this layer empty.
-      if (basinPinLayer) basinPinLayer.removeAll();
     }
 
     // ───────────── Search + suggestions ─────────────
     const input = $("searchInput"), list = $("suggestList"), clearBtn = $("searchClear");
-    let suggestGraphics = [], debounceT = null;
-    const escSql = (s) => s.replace(/'/g, "''");
+    let suggestGraphics = [], debounceT = null, activeSugg = -1, suggestSeq = 0;
+    const escSql  = (s) => s.replace(/'/g, "''");
+    // Escape LIKE wildcards typed by the user; paired with ESCAPE '\' in the clause
+    // (verified supported by the TRPA service's standardized SQL).
+    const escLike = (s) => escSql(s).replace(/([\\%_])/g, "\\$1");
+    const escHtml = (s) => String(s).replace(/[&<>"']/g,
+      (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 
     async function runSuggest(termRaw) {
       const term = termRaw.trim();
       if (term.length < 3 || !parcelsFL) { closeSuggest(); return; }
-      const t = escSql(term.toUpperCase());
-      const clauses = [`UPPER(APO_ADDRESS) LIKE '%${t}%'`, `UPPER(APN) LIKE '${t}%'`];
+      const t = escLike(term.toUpperCase());
+      const clauses = [
+        `UPPER(APO_ADDRESS) LIKE '%${t}%' ESCAPE '\\'`,
+        `UPPER(APN) LIKE '${t}%' ESCAPE '\\'`,
+      ];
+      // Dash-insensitive APN match for pure-digit input (digits only — no escaping needed)
       if (/^\d{4,}$/.test(term)) clauses.push(`APN LIKE '${term.split("").join("%")}%'`);
+      const seq = ++suggestSeq;   // drop stale responses that resolve out of order
       try {
         const res = await parcelsFL.queryFeatures({ where: clauses.join(" OR "),
           outFields: ["APN","APO_ADDRESS","JURISDICTION","COUNTY"], returnGeometry: true,
           outSpatialReference: view.spatialReference, num: 8, orderByFields: ["APO_ADDRESS ASC"] });
+        if (seq !== suggestSeq) return;
         suggestGraphics = res.features; renderSuggest(term);
-      } catch (e) { console.error(e);
-        list.innerHTML = `<div class="suggest-empty">Search error — check the connection.</div>`; list.classList.add("open"); }
+      } catch (e) {
+        if (seq !== suggestSeq) return;
+        console.error(e);
+        list.innerHTML = `<div class="suggest-empty">Search error — check the connection.</div>`;
+        openSuggest();
+      }
     }
     function renderSuggest(term) {
+      activeSugg = -1;
       if (!suggestGraphics.length) {
-        list.innerHTML = `<div class="suggest-empty">No parcels match “${term}”.</div>`; list.classList.add("open"); return; }
+        list.innerHTML = `<div class="suggest-empty">No parcels match “${escHtml(term)}”.</div>`;
+        openSuggest(); return;
+      }
       list.innerHTML = suggestGraphics.map((g, i) => {
-        const a = g.attributes, addr = a.APO_ADDRESS || "(no address on file)";
-        const juris = [a.JURISDICTION, a.COUNTY].filter(Boolean).join(" · ");
-        return `<div class="suggest-item" data-i="${i}"><span class="s-primary">${addr}</span>
-          <span class="s-secondary">APN <span class="s-apn">${a.APN || "—"}</span>${juris ? " · " + juris : ""}</span></div>`;
+        const a = g.attributes, addr = escHtml(a.APO_ADDRESS || "(no address on file)");
+        const juris = escHtml([a.JURISDICTION, a.COUNTY].filter(Boolean).join(" · "));
+        return `<div class="suggest-item" role="option" id="sugg-${i}" data-i="${i}" aria-selected="false">
+          <span class="s-primary">${addr}</span>
+          <span class="s-secondary">APN <span class="s-apn">${escHtml(a.APN || "—")}</span>${juris ? " · " + juris : ""}</span></div>`;
       }).join("");
-      list.classList.add("open");
-      list.querySelectorAll(".suggest-item").forEach(el =>
-        el.addEventListener("click", () => selectResult(suggestGraphics[+el.dataset.i])));
+      openSuggest();
     }
-    function closeSuggest() { list.classList.remove("open"); list.innerHTML = ""; }
+    function openSuggest()  { list.classList.add("open");    input.setAttribute("aria-expanded", "true"); }
+    function closeSuggest() { list.classList.remove("open"); list.innerHTML = ""; activeSugg = -1;
+      input.setAttribute("aria-expanded", "false"); input.removeAttribute("aria-activedescendant"); }
+    // One delegated click handler instead of per-item listeners
+    list.addEventListener("click", (e) => {
+      const el = e.target.closest(".suggest-item");
+      if (el) selectResult(suggestGraphics[+el.dataset.i]);
+    });
+    function setActiveSugg(i) {
+      const items = list.querySelectorAll(".suggest-item");
+      if (!items.length) return;
+      activeSugg = (i + items.length) % items.length;
+      items.forEach((el, k) => { el.classList.toggle("active", k === activeSugg);
+        el.setAttribute("aria-selected", k === activeSugg ? "true" : "false"); });
+      input.setAttribute("aria-activedescendant", `sugg-${activeSugg}`);
+      items[activeSugg].scrollIntoView({ block: "nearest" });
+    }
+    input.addEventListener("keydown", (e) => {
+      const open = list.classList.contains("open");
+      if (e.key === "ArrowDown") { e.preventDefault(); if (open) setActiveSugg(activeSugg + 1); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); if (open) setActiveSugg(activeSugg - 1); }
+      else if (e.key === "Enter") {
+        if (open && suggestGraphics.length) { e.preventDefault();
+          selectResult(suggestGraphics[activeSugg >= 0 ? activeSugg : 0]); }
+      }
+      else if (e.key === "Escape") { closeSuggest(); }
+    });
+
+    // Union of all location extents (point-only locations contribute a zero-area extent).
+    function unionExtent() {
+      let ext = null;
+      for (const loc of locations) {
+        const e = loc.geometry.extent || new window._Extent({
+          xmin: loc.point.x, ymin: loc.point.y, xmax: loc.point.x, ymax: loc.point.y,
+          spatialReference: loc.point.spatialReference });
+        ext = ext ? ext.union(e) : e.clone();
+      }
+      return ext;
+    }
+    function zoomToLocations() {
+      if (!locations.length) return;
+      if (locations.length === 1) {
+        const loc = loc0();
+        view.goTo({ target: loc.geometry.extent ? loc.geometry.extent.expand(2.2)
+                                                : { center: loc.point, zoom: 17 } }, { duration: 550 });
+      } else {
+        view.goTo({ target: unionExtent().expand(1.3) }, { duration: 550 });
+      }
+    }
 
     function selectResult(g) {
       closeSuggest();
       const a = g.attributes, geom = g.geometry;
       if (!geom) { toast("No geometry for this parcel."); return; }
+      const apn = a.APN || "—";
+      const existing = locations.findIndex(l => l.apn === apn);
+      if (existing >= 0) {
+        toast("Parcel already added.");
+        const loc = locations[existing];
+        view.goTo({ target: loc.geometry.extent ? loc.geometry.extent.expand(2.2)
+                                                : { center: loc.point, zoom: 17 } }, { duration: 550 });
+        return;
+      }
+      if (locations.length >= MAX_LOCATIONS) {
+        toast(`Up to ${MAX_LOCATIONS} locations — remove one to add another.`); return;
+      }
       const pt = geom.extent ? geom.extent.center : geom;
-      current = { apn: a.APN || "—", address: a.APO_ADDRESS || "(no address on file)",
-        jurisdiction: a.JURISDICTION || "", county: a.COUNTY || "", geometry: geom, point: pt };
-      input.value = a.APO_ADDRESS || a.APN || "";
-      drawResult(); updateLocCard();
-      view.goTo({ target: geom.extent ? geom.extent.expand(2.2) : { center: pt, zoom: 17 } }, { duration: 550 });
+      locations.push({ apn, address: a.APO_ADDRESS || "(no address on file)",
+        jurisdiction: a.JURISDICTION || "", county: a.COUNTY || "", geometry: geom, point: pt });
+      // First add mirrors the old single-parcel behavior (address stays in the box);
+      // later adds clear it so the next search starts clean.
+      input.value = locations.length === 1 ? (a.APO_ADDRESS || apn) : "";
+      clearBtn.style.display = input.value ? "block" : "none";
+      refreshLocations();
+      zoomToLocations();
     }
+    function removeLocation(i) {
+      locations.splice(i, 1);
+      refreshLocations();
+      if (locations.length) zoomToLocations();
+      else {
+        input.value = ""; clearBtn.style.display = "none";
+        view.goTo({ center: BASIN.center, zoom: BASIN.zoom }, { duration: 500 });
+      }
+    }
+    function refreshLocations() { drawResult(); updateLocCard(); renderLocationChips(); }
+
     function drawResult() {
-      if (!pinLayer || !current) return;
+      if (!pinLayer) return;
       const G = window._Graphic; pinLayer.removeAll(); mapPinLayer.removeAll();
-      if (current.geometry.extent) pinLayer.add(new G({ geometry: current.geometry, symbol: parcelFillSymbol(brand().accent) }));
-      mapPinLayer.add(new G({ geometry: current.point, symbol: pinSymbol(brand().pin) }));
+      locations.forEach((loc, i) => {
+        const num = locations.length > 1 ? i + 1 : undefined;
+        if (loc.geometry.extent) pinLayer.add(new G({ geometry: loc.geometry, symbol: parcelFillSymbol(brand().accent) }));
+        mapPinLayer.add(new G({ geometry: loc.point, symbol: pinSymbol(brand().pin, num) }));
+      });
     }
     function updateLocCard() {
-      if (!current) { $("locCard").classList.remove("show"); return; }
-      $("locAddr").textContent = current.address;
-      $("locMeta").textContent = [`APN ${current.apn}`, countyLabel()].filter(Boolean).join("  ·  ");
-      $("locCard").classList.add("show");
+      const card = $("locCard");
+      if (!locations.length) { card.classList.remove("show"); return; }
+      if (locations.length === 1) {
+        $("locAddr").textContent = loc0().address;
+        $("locMeta").textContent = [`APN ${loc0().apn}`, countyLabel(loc0())].filter(Boolean).join("  ·  ");
+      } else {
+        $("locAddr").textContent = `${locations.length} Project Locations`;
+        $("locMeta").textContent = locations.map((l, i) => `${i + 1} · ${l.apn}`).join("   ");
+      }
+      card.classList.add("show");
     }
+    function renderLocationChips() {
+      const row = $("locChips");
+      row.hidden = !locations.length;
+      row.innerHTML = "";
+      locations.forEach((loc, i) => {
+        const chip = document.createElement("calcite-chip");
+        chip.scale = "s"; chip.closable = true; chip.dataset.i = i;
+        chip.textContent = `${locations.length > 1 ? (i + 1) + " · " : ""}${loc.address}`;
+        row.appendChild(chip);
+      });
+    }
+    $("locChips").addEventListener("calciteChipClose", (e) => {
+      const i = +e.target.dataset.i;
+      if (!Number.isNaN(i)) removeLocation(i);
+    });
+
     input.addEventListener("input", () => {
       clearBtn.style.display = input.value ? "block" : "none";
       clearTimeout(debounceT); debounceT = setTimeout(() => runSuggest(input.value), 220);
@@ -393,9 +573,8 @@
     input.addEventListener("focus", () => { if (suggestGraphics.length && input.value.length >= 3) list.classList.add("open"); });
     clearBtn.addEventListener("click", () => {
       input.value = ""; clearBtn.style.display = "none"; closeSuggest();
-      suggestGraphics = []; current = null;
-      if (pinLayer) pinLayer.removeAll(); if (mapPinLayer) mapPinLayer.removeAll(); if (basinPinLayer) basinPinLayer.removeAll();
-      $("locCard").classList.remove("show");
+      suggestGraphics = []; locations = [];
+      refreshLocations();
       view.goTo({ center: BASIN.center, zoom: BASIN.zoom }, { duration: 500 });
     });
     document.addEventListener("click", (e) => { if (!e.target.closest(".hdr-search")) closeSuggest(); });
@@ -406,10 +585,12 @@
       const r = document.documentElement.style;
       r.setProperty("--brand-primary", b.primary); r.setProperty("--brand-accent", b.accent);
       r.setProperty("--brand-dark", b.dark); r.setProperty("--brand-font", b.font);
-      getLogo().then(im => { if (im && im._durl) $("brandLogo").src = im._durl; });
+      const key = brandKey;   // a slow logo load must not overwrite a newer brand's logo
+      getLogo().then(im => { if (key === brandKey && im && im._durl) $("brandLogo").src = im._durl; });
       $("brandAgency").textContent = b.agency;
       $("brandSeg").querySelectorAll("button").forEach(btn => btn.classList.toggle("active", btn.dataset.brand === brandKey));
-      if (current) drawResult(); updateLocCard();
+      if (locations.length) drawResult();
+      updateLocCard();
     }
     $("brandSeg").addEventListener("click", (e) => {
       const btn = e.target.closest("button"); if (!btn) return; brandKey = btn.dataset.brand; applyBrand();
@@ -421,14 +602,16 @@
     $("basemapSelect").addEventListener("change", (e) => {
       map.basemap = makeBasemap(e.target.value);
     });
-    // Detail-map zoom: "fit" frames the parcel; a scale value zooms to that fixed scale on the pin.
+    // Detail-map zoom: "fit" frames the location(s); a scale value zooms to that
+    // fixed scale centered on the locations (or current view center if none).
     $("scaleSelect").addEventListener("change", (e) => {
-      const v = e.target.value, target = current ? current.point : view.center;
+      const v = e.target.value;
       if (v === "fit") {
-        if (current && current.geometry.extent) view.goTo({ target: current.geometry.extent.expand(2.2) }, { duration: 500 });
-        else view.goTo({ target, zoom: 17 }, { duration: 500 });
+        if (locations.length) zoomToLocations();
+        else view.goTo({ center: BASIN.center, zoom: BASIN.zoom }, { duration: 500 });
       } else {
-        view.goTo({ target, scale: +v }, { duration: 500 });
+        const ext = unionExtent();
+        view.goTo({ target: ext ? ext.center : view.center, scale: +v }, { duration: 500 });
       }
     });
 
@@ -457,14 +640,14 @@
     }
     const rgba = (a) => `rgba(${a[0]},${a[1]},${a[2]},${a[3]})`;
     const baseFont = () => brand().font.split(",")[0].replace(/'/g, "") + ", sans-serif";
-    const today = () => new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
     async function settle(v, ms = 3500) {
       if (v && v.updating && window._reactiveUtils)
         await Promise.race([window._reactiveUtils.whenOnce(() => !v.updating), new Promise(r => setTimeout(r, ms))]);
     }
     // Crisp vector teardrop pin (Path2D), tip anchored at (tipX, tipY), height h.
-    function drawPin(ctx, tipX, tipY, h, hex) {
+    // With `num` the white dot becomes the location number (multi-location mode).
+    function drawPin(ctx, tipX, tipY, h, hex, num) {
       const s = h / 34;                    // path spans y≈1..35 (≈34 tall), tip at (13,35)
       ctx.save();
       ctx.translate(tipX - 13 * s, tipY - 35 * s); ctx.scale(s, s);
@@ -472,14 +655,30 @@
       const p = new Path2D("M13 1 C6 1 1 5.5 1 12 C1 21 13 35 13 35 C13 35 25 21 25 12 C25 5.5 20 1 13 1 Z");
       ctx.fillStyle = hex; ctx.fill(p);
       ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5; ctx.stroke(p);
-      ctx.beginPath(); ctx.arc(13, 12, 4.5, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
+      if (num != null) {
+        ctx.fillStyle = "#fff"; ctx.font = `700 13px ${baseFont()}`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(String(num), 13, 12.5);
+      } else {
+        ctx.beginPath(); ctx.arc(13, 12, 4.5, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
+      }
       ctx.restore();
     }
-    // Normalized pin position (tip) within a view's frame, or null if off-frame.
-    function pinNorm(v, w, hgt) {
-      if (!current) return null;
-      const sp = v.toScreen(current.point); if (!sp) return null;
-      return { nx: sp.x / w, ny: sp.y / hgt };
+    // Normalized pin positions (tips) within a view's frame; off-frame locations are
+    // dropped with a warning (a fixed-scale detail view can crop a location out —
+    // better to warn than draw the pin at a garbage position).
+    function inFrame(p) { return p && p.nx >= -0.02 && p.nx <= 1.02 && p.ny >= -0.02 && p.ny <= 1.02; }
+    function offFrameWarn() { toast("Note: a location falls outside the exported map frame.", 4500); }
+    function pinNorms(v, w, hgt, ax = 0, ay = 0) {
+      const pins = []; let dropped = false;
+      locations.forEach((loc, i) => {
+        const sp = v.toScreen(loc.point);
+        const p = sp ? { nx: (sp.x - ax) / w, ny: (sp.y - ay) / hgt,
+                         num: locations.length > 1 ? i + 1 : undefined } : null;
+        if (inFrame(p)) pins.push(p); else dropped = true;
+      });
+      if (dropped) offFrameWarn();
+      return pins;
     }
 
     // Resize the offscreen basin view to the target aspect, refit, and screenshot at 2×.
@@ -491,24 +690,24 @@
       await basinView.goTo(basinView._basinExtent, { animate: false }).catch(() => {});
       await settle(basinView, 4000);
       await new Promise(r => setTimeout(r, 200));   // let the final frame paint
-      const pin = pinNorm(basinView, basinView.width, basinView.height);
-      const s = await basinView.takeScreenshot({ width: wPx * 2, height: hPx * 2, format: "png" });
-      return { img: await loadImage(s.dataUrl), pin };
+      const pins = pinNorms(basinView, basinView.width, basinView.height);
+      const k = EXPORT.basinShot2x;
+      const s = await basinView.takeScreenshot({ width: wPx * k, height: hPx * k, format: "png" });
+      return { img: await loadImage(s.dataUrl), pins };
     }
     async function shotZoom(aspect) {
-      if (mapPinLayer) mapPinLayer.visible = false;    // hide raster pin (we overdraw a crisp one) before settling
+      if (mapPinLayer) mapPinLayer.visible = false;    // hide raster pins (we overdraw crisp ones) before settling
       await settle(view, 5000);
       await new Promise(r => setTimeout(r, 300));      // let basemap tiles finish painting
       const vw = view.width, vh = view.height; let aw, ah;
       if (vw / vh > aspect) { ah = vh; aw = ah * aspect; } else { aw = vw; ah = aw / aspect; }
       const ax = (vw - aw) / 2, ay = (vh - ah) / 2;
-      const sp = current ? view.toScreen(current.point) : null;
-      const pin = sp ? { nx: (sp.x - ax) / aw, ny: (sp.y - ay) / ah } : null;
-      const outH = 1300, outW = Math.round(outH * aspect);
+      const pins = pinNorms(view, aw, ah, ax, ay);
+      const outH = EXPORT.zoomOutH, outW = Math.round(outH * aspect);
       const s = await view.takeScreenshot({ area: { x: ax, y: ay, width: aw, height: ah },
         width: outW, height: outH, format: "png" });
       if (mapPinLayer) mapPinLayer.visible = true;
-      return { img: await loadImage(s.dataUrl), pin };
+      return { img: await loadImage(s.dataUrl), pins };
     }
     function drawLogo(ctx, img, x, y, h) { if (!img) return 0; const w = img.width*(h/img.height); ctx.drawImage(img, x, y, w, h); return w; }
     function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x+r,y);
@@ -530,27 +729,64 @@
       ctx.fillStyle = "rgba(255,255,255,0.92)"; ctx.fill(); ctx.restore();
       ctx.drawImage(img, cx - size/2, cy - size/2, size, size);
     }
-    // LOCATION card, anchored bottom-left at (x, yBottom); auto-sizes to the text.
+    // Truncate text with an ellipsis to fit maxW at the current ctx font.
+    function ellipsize(ctx, text, maxW) {
+      if (ctx.measureText(text).width <= maxW) return text;
+      let t = text;
+      while (t.length > 1 && ctx.measureText(t + "…").width > maxW) t = t.slice(0, -1);
+      return t + "…";
+    }
+    // LOCATION(S) card, anchored bottom-left at (x, yBottom); auto-sizes to the text.
     function drawLocationCard(ctx, x, yBottom, s) {
-      if (!current) return; const b = brand();
+      if (!locations.length) return; const b = brand();
       const fsL = 26*s, fsA = 44*s, fsM = 28*s, pad = 34*s, bar = 9*s;
-      const metaText = `APN ${current.apn}${countyLabel() ? "  ·  "+countyLabel() : ""}`;
+      const single = locations.length === 1;
+      const MAX_ROWS = 6;
+      // rows: [{bold, gray}] — single keeps the classic address + meta lines
+      const rows = single
+        ? [{ bold: loc0().address },
+           { gray: `APN ${loc0().apn}${countyLabel(loc0()) ? "  ·  "+countyLabel(loc0()) : ""}` }]
+        : locations.slice(0, MAX_ROWS).map((l, i) => ({ bold: `${i+1}  ${l.address}`, grayAppend: `  ·  APN ${l.apn}` }));
+      if (!single && locations.length > MAX_ROWS) rows.push({ gray: `+${locations.length - MAX_ROWS} more` });
       ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
-      ctx.font = `700 ${fsA}px ${baseFont()}`; const wA = ctx.measureText(current.address).width;
-      ctx.font = `400 ${fsM}px ${baseFont()}`; const wM = ctx.measureText(metaText).width;
-      const w = Math.max(wA, wM) + bar + pad*2;
-      const h = pad*2 + fsL + fsA*1.05 + fsM*1.15;
+      // measure widest row
+      let wMax = 0;
+      for (const r of rows) {
+        let wRow = 0;
+        if (r.bold) { ctx.font = `700 ${single ? fsA : fsM*1.15}px ${baseFont()}`; wRow += ctx.measureText(r.bold).width; }
+        if (r.grayAppend) { ctx.font = `400 ${fsM}px ${baseFont()}`; wRow += ctx.measureText(r.grayAppend).width; }
+        if (r.gray) { ctx.font = `400 ${fsM}px ${baseFont()}`; wRow = Math.max(wRow, ctx.measureText(r.gray).width); }
+        wMax = Math.max(wMax, wRow);
+      }
+      const rowH = single ? 0 : fsM * 1.55;
+      const h = single ? pad*2 + fsL + fsA*1.05 + fsM*1.15
+                       : pad*2 + fsL + rows.length * rowH + fsM*0.2;
+      const w = wMax + bar + pad*2;
       const y = yBottom - h;
       ctx.save(); ctx.shadowColor = "rgba(11,31,65,0.22)"; ctx.shadowBlur = 22*s; ctx.shadowOffsetY = 6*s;
       ctx.fillStyle = "#fff"; roundRect(ctx, x, y, w, h, 14*s); ctx.fill(); ctx.restore();
       ctx.fillStyle = b.accent; roundRect(ctx, x, y, bar, h, 4*s); ctx.fill();
       const tx = x + bar + pad;
       let cy = y + pad + fsL*0.85;
-      ctx.fillStyle = b.accent; ctx.font = `700 ${fsL}px ${baseFont()}`; ctx.fillText("LOCATION", tx, cy);
-      cy += fsA*1.02;
-      ctx.fillStyle = b.dark; ctx.font = `700 ${fsA}px ${baseFont()}`; ctx.fillText(current.address, tx, cy);
-      cy += fsM*1.3;
-      ctx.fillStyle = "#6B7688"; ctx.font = `400 ${fsM}px ${baseFont()}`; ctx.fillText(metaText, tx, cy);
+      ctx.fillStyle = b.accent; ctx.font = `700 ${fsL}px ${baseFont()}`;
+      ctx.fillText(single ? "LOCATION" : "LOCATIONS", tx, cy);
+      if (single) {
+        cy += fsA*1.02;
+        ctx.fillStyle = b.dark; ctx.font = `700 ${fsA}px ${baseFont()}`; ctx.fillText(rows[0].bold, tx, cy);
+        cy += fsM*1.3;
+        ctx.fillStyle = "#6B7688"; ctx.font = `400 ${fsM}px ${baseFont()}`; ctx.fillText(rows[1].gray, tx, cy);
+      } else {
+        for (const r of rows) {
+          cy += rowH;
+          let rx = tx;
+          if (r.bold) { ctx.fillStyle = b.dark; ctx.font = `700 ${fsM*1.15}px ${baseFont()}`;
+            ctx.fillText(r.bold, rx, cy); rx += ctx.measureText(r.bold).width; }
+          if (r.grayAppend) { ctx.fillStyle = "#6B7688"; ctx.font = `400 ${fsM}px ${baseFont()}`;
+            ctx.fillText(r.grayAppend, rx, cy); }
+          if (r.gray && !r.bold) { ctx.fillStyle = "#6B7688"; ctx.font = `400 ${fsM}px ${baseFont()}`;
+            ctx.fillText(r.gray, tx, cy); }
+        }
+      }
     }
     async function drawCaption(ctx, x, y, w, h, showAddress = true) {
       const b = brand(); ctx.fillStyle = "#fff"; ctx.fillRect(x, y, w, h);
@@ -558,13 +794,19 @@
       const logo = await getLogo(); const pad = Math.round(h*0.22);
       const logoW = drawLogo(ctx, logo, x+pad, y+pad*1.1, h*0.5);
       const tx = x + pad + (logoW ? logoW + pad*0.8 : 0);
+      const maxW = x + w - pad - tx;
       ctx.textBaseline = "middle"; ctx.textAlign = "left";
-      if (showAddress && current) {   // Split omits this (the LOCATION card already shows it)
+      if (showAddress && locations.length === 1) {   // Split omits this (the LOCATION card already shows it)
         ctx.fillStyle = b.dark; ctx.font = `700 ${Math.round(h*0.26)}px ${baseFont()}`;
-        ctx.fillText(current.address, tx, y + h*0.42);
+        ctx.fillText(ellipsize(ctx, loc0().address, maxW), tx, y + h*0.42);
         ctx.fillStyle = "#6B7688"; ctx.font = `400 ${Math.round(h*0.17)}px ${baseFont()}`;
-        ctx.fillText(`APN ${current.apn}${countyLabel() ? "   ·   "+countyLabel() : ""}`, tx, y + h*0.72);
-      } else if (!current) {
+        ctx.fillText(ellipsize(ctx, `APN ${loc0().apn}${countyLabel(loc0()) ? "   ·   "+countyLabel(loc0()) : ""}`, maxW), tx, y + h*0.72);
+      } else if (showAddress && locations.length > 1) {
+        ctx.fillStyle = b.dark; ctx.font = `700 ${Math.round(h*0.26)}px ${baseFont()}`;
+        ctx.fillText(`${locations.length} Project Locations`, tx, y + h*0.42);
+        ctx.fillStyle = "#6B7688"; ctx.font = `400 ${Math.round(h*0.17)}px ${baseFont()}`;
+        ctx.fillText(ellipsize(ctx, "APNs " + locations.map(l => l.apn).join(", "), maxW), tx, y + h*0.72);
+      } else if (!locations.length) {
         ctx.fillStyle = b.dark; ctx.font = `700 ${Math.round(h*0.26)}px ${baseFont()}`;
         ctx.fillText(b.exportName, tx, y + h*0.5);
       }
@@ -572,22 +814,37 @@
 
     // Slide — branded presentation slide: logo + title block | basin locator (16:9)
     async function composeSlide(caption) {
-      const W = 2400, H = 1350, b = brand();
+      const { W, H, margin: M, pinH, arrow } = EXPORT.slide, b = brand();
       const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
       const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0,0,W,H);
-      const M = 90;   // 0.5" at 180px/in — equal map margins top/right/bottom
-      const mp = { x: 2400 - M - 960, y: M, w: 960, h: H - 2*M };   // 1350, 90, 960, 1170
-      const { img: basin, pin } = await shotBasin(Math.round(mp.w*0.72), Math.round(mp.h*0.72));
+      const mp = { x: W - M - 960, y: M, w: 960, h: H - 2*M };   // equal 0.5" margins top/right/bottom
+      const { img: basin, pins } = await shotBasin(Math.round(mp.w*0.72), Math.round(mp.h*0.72));
       ctx.fillStyle = rgba(BASIN_STYLE.outside); ctx.fillRect(mp.x, mp.y, mp.w, mp.h);
       if (basin) ctx.drawImage(basin, mp.x, mp.y, mp.w, mp.h);
-      if (pin) drawPin(ctx, mp.x + pin.nx*mp.w, mp.y + pin.ny*mp.h, 74, b.pin);
-      await drawNorthArrow(ctx, mp.x+mp.w-64, mp.y+mp.h-64, 84, b.dark);
+      pins.forEach(p => drawPin(ctx, mp.x + p.nx*mp.w, mp.y + p.ny*mp.h, pinH, b.pin, p.num));
+      await drawNorthArrow(ctx, mp.x+mp.w-64, mp.y+mp.h-64, arrow, b.dark);
       const logo = await getLogo(); drawLogo(ctx, logo, 150, 130, brand().slideLogoH || 130);
       ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
-      if (caption && current) {
-        ctx.fillStyle = b.dark; ctx.font = `700 92px ${baseFont()}`; ctx.fillText(current.address, 150, 640);
+      const colW = mp.x - 150 - 40;   // usable width of the left text column
+      if (caption && locations.length === 1) {
+        ctx.fillStyle = b.dark; ctx.font = `700 92px ${baseFont()}`;
+        ctx.fillText(ellipsize(ctx, loc0().address, colW), 150, 640);
         ctx.fillStyle = "#6B7688"; ctx.font = `400 46px ${baseFont()}`;
-        ctx.fillText(`APN ${current.apn}${countyLabel() ? "   ·   "+countyLabel() : ""}`, 150, 710);
+        ctx.fillText(ellipsize(ctx, `APN ${loc0().apn}${countyLabel(loc0()) ? "   ·   "+countyLabel(loc0()) : ""}`, colW), 150, 710);
+      } else if (caption && locations.length > 1) {
+        ctx.fillStyle = b.dark; ctx.font = `700 92px ${baseFont()}`;
+        ctx.fillText(`${locations.length} Project Locations`, 150, 560);
+        const MAX_LINES = 8;
+        let ly = 640;
+        locations.slice(0, MAX_LINES).forEach((l, i) => {
+          ctx.fillStyle = b.dark; ctx.font = `600 40px ${baseFont()}`;
+          ctx.fillText(ellipsize(ctx, `${i+1}.  ${l.address} — APN ${l.apn}`, colW), 150, ly);
+          ly += 58;
+        });
+        if (locations.length > MAX_LINES) {
+          ctx.fillStyle = "#6B7688"; ctx.font = `400 40px ${baseFont()}`;
+          ctx.fillText(`+${locations.length - MAX_LINES} more`, 150, ly);
+        }
       }
       // accent line: from the title's left edge across to the map's right edge, at the map's bottom
       ctx.fillStyle = b.primary; ctx.fillRect(150, mp.y + mp.h - 6, (mp.x + mp.w) - 150, 6);
@@ -595,58 +852,174 @@
     }
     // Locator — portrait 8.5×11 Tahoe basin, styled, with pin
     async function composeLocator(caption) {
-      const W = 1700, H = 2200, b = brand();
+      const { W, H, capFrac, pinH, arrow } = EXPORT.locator, b = brand();
       const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
       const ctx = cv.getContext("2d"); ctx.fillStyle = rgba(BASIN_STYLE.outside); ctx.fillRect(0,0,W,H);
-      const capH = caption ? Math.round(H*0.085) : 0, mapH = H - capH;
-      const { img: basin, pin } = await shotBasin(850, Math.round(850*mapH/W));
+      const capH = caption ? Math.round(H*capFrac) : 0, mapH = H - capH;
+      const { img: basin, pins } = await shotBasin(850, Math.round(850*mapH/W));
       if (basin) ctx.drawImage(basin, 0, 0, W, mapH);
-      if (pin) drawPin(ctx, pin.nx*W, pin.ny*mapH, 104, b.pin);
-      await drawNorthArrow(ctx, W-96, mapH-96, 100, b.dark);
+      pins.forEach(p => drawPin(ctx, p.nx*W, p.ny*mapH, pinH, b.pin, p.num));
+      await drawNorthArrow(ctx, W-96, mapH-96, arrow, b.dark);
       if (caption) await drawCaption(ctx, 0, mapH, W, capH);
       return cv;
     }
     // Split — 2/3 zoomed parcel detail | 1/3 basin locator (16:9)
     async function composeSplit(caption) {
-      const W = 2400, H = 1350, b = brand();
+      const { W, H, capFrac, pinHZoom, pinHBasin, arrow } = EXPORT.split, b = brand();
       const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
       const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0,0,W,H);
-      const capH = caption ? Math.round(H*0.11) : 0, mapH = H - capH;
+      const capH = caption ? Math.round(H*capFrac) : 0, mapH = H - capH;
       const leftW = Math.round(W*2/3), rightW = W - leftW;
       const [zoom, basin] = await Promise.all([
         shotZoom(leftW/mapH), shotBasin(Math.round(rightW*0.6), Math.round(mapH*0.6)) ]);
       if (zoom.img) ctx.drawImage(zoom.img, 0, 0, leftW, mapH);
-      if (zoom.pin) drawPin(ctx, zoom.pin.nx*leftW, zoom.pin.ny*mapH, 88, b.pin);
+      zoom.pins.forEach(p => drawPin(ctx, p.nx*leftW, p.ny*mapH, pinHZoom, b.pin, p.num));
       ctx.fillStyle = rgba(BASIN_STYLE.outside); ctx.fillRect(leftW, 0, rightW, mapH);
       if (basin.img) ctx.drawImage(basin.img, leftW, 0, rightW, mapH);
-      if (basin.pin) drawPin(ctx, leftW + basin.pin.nx*rightW, basin.pin.ny*mapH, 58, b.pin);
+      basin.pins.forEach(p => drawPin(ctx, leftW + p.nx*rightW, p.ny*mapH, pinHBasin, b.pin, p.num));
       ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.fillRect(leftW-2, 0, 4, mapH);
-      await drawNorthArrow(ctx, W-64, mapH-64, 80, b.dark);
+      await drawNorthArrow(ctx, W-64, mapH-64, arrow, b.dark);
       drawLocationCard(ctx, 44, mapH - 44, 1.15);
       if (caption) await drawCaption(ctx, 0, mapH, W, capH, false);  // address is on the LOCATION card
       return cv;
     }
 
-    async function exportPng() {
-      if (!view) return;
-      if (!basinReady) { toast("Basin map still loading — try again in a moment."); return; }
-      toast("Rendering PNG…", 0);
-      try {
-        if (document.fonts) { const fam = brand().font.split(",")[0].replace(/'/g,"").trim();
-          await Promise.all([400,600,700].map(w => document.fonts.load(`${w} 40px '${fam}'`))).catch(()=>{}); }
-        updateBasinPin();
-        const caption = $("capSwitch").checked;
-        const cv = exportLayout === "split" ? await composeSplit(caption)
-                 : exportLayout === "locator" ? await composeLocator(caption)
-                 : await composeSlide(caption);
-        const url = cv.toDataURL("image/png"); const a = document.createElement("a");
-        const slug = (current?.apn || current?.address || "locator").toString().replace(/[^\w]+/g,"-").replace(/^-|-$/g,"").slice(0,40) || "locator";
-        const name = exportLayout;
-        a.href = url; a.download = `${brandKey}-${name}-${slug}.png`;
-        document.body.appendChild(a); a.click(); a.remove(); toast("PNG downloaded.");
-      } catch (e) { console.error(e); toast("Export failed — see console."); }
+    // ── Export pipeline ──
+    // composeCurrent(): fonts + layout dispatch → canvas. runExport(): guards,
+    // button spinner, control freeze, toast — shared by PNG / PPTX / clipboard.
+    async function composeCurrent() {
+      if (document.fonts) { const fam = brand().font.split(",")[0].replace(/'/g,"").trim();
+        await Promise.all([400,600,700].map(w => document.fonts.load(`${w} 40px '${fam}'`))).catch(()=>{}); }
+      const caption = $("capSwitch").checked;
+      return exportLayout === "split" ? composeSplit(caption)
+           : exportLayout === "locator" ? composeLocator(caption)
+           : composeSlide(caption);
     }
-    $("exportBtn").addEventListener("click", exportPng);
+    function exportSlug() {
+      return locations.length > 1 ? `${locations.length}-locations`
+        : ((loc0()?.apn || loc0()?.address || "locator").toString()
+            .replace(/[^\w]+/g,"-").replace(/^-|-$/g,"").slice(0,40) || "locator");
+    }
+    function downloadUrl(url, filename) {
+      const a = document.createElement("a");
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+    let exporting = false;
+    async function runExport(btn, busyMsg, worker) {
+      if (!view || exporting) return;
+      if (!basinReady) { toast("Basin map still loading — try again in a moment."); return; }
+      if (exportLayout === "split" && !locations.length) {
+        toast("Add a location first — the Split layout needs a parcel."); return;
+      }
+      exporting = true;
+      btn.loading = true;
+      document.body.classList.add("exporting");   // freezes brand/layout/caption/basemap controls
+      toast(busyMsg, 0);
+      try { await worker(); }
+      catch (e) { console.error(e); toast("Export failed — see console."); }
+      finally {
+        exporting = false; btn.loading = false;
+        document.body.classList.remove("exporting");
+      }
+    }
+
+    function exportPng() {
+      return runExport($("exportBtn"), "Rendering PNG…", async () => {
+        const cv = await composeCurrent();
+        downloadUrl(cv.toDataURL("image/png"), `${brandKey}-${exportLayout}-${exportSlug()}.png`);
+        toast("PNG downloaded.");
+      });
+    }
+
+    // ── PPTX export (PptxGenJS, loaded on demand) ──
+    // The UMD bundle registers with Dojo's AMD `define` if it's visible, which
+    // throws "multipleDefine" under the ArcGIS loader — mask `define` while the
+    // script loads so it lands on window.PptxGenJS instead (same pattern as
+    // projects-map.html's ensureShpWrite). Also sets window.JSZip (harmless).
+    let pptxLoadPromise = null;
+    function ensurePptx() {
+      if (typeof window.PptxGenJS !== "undefined") return Promise.resolve();
+      if (pptxLoadPromise) return pptxLoadPromise;
+      pptxLoadPromise = new Promise((resolve, reject) => {
+        const savedDefine = window.define;
+        window.define = undefined;
+        const s = document.createElement("script");
+        s.src = "https://cdn.jsdelivr.net/npm/pptxgenjs@4.0.1/dist/pptxgen.bundle.js";
+        s.onload = () => {
+          window.define = savedDefine;
+          if (typeof window.PptxGenJS === "undefined")
+            reject(new Error("PptxGenJS loaded but global is missing"));
+          else resolve();
+        };
+        s.onerror = () => {
+          window.define = savedDefine;
+          pptxLoadPromise = null;   // allow retry after a network hiccup
+          reject(new Error("PptxGenJS CDN load failed"));
+        };
+        document.head.appendChild(s);
+      });
+      return pptxLoadPromise;
+    }
+    function exportPptx() {
+      return runExport($("exportBtn"), "Rendering PPTX…", async () => {
+        await ensurePptx();
+        const cv = await composeCurrent();
+        const pptx = new window.PptxGenJS();
+        let w, h;
+        if (exportLayout === "locator") {           // 8.5×11 portrait letter slide
+          pptx.defineLayout({ name: "LETTER_P", width: 8.5, height: 11 });
+          pptx.layout = "LETTER_P"; w = 8.5; h = 11;
+        } else {                                     // true 16:9 widescreen
+          pptx.layout = "LAYOUT_WIDE"; w = 13.333; h = 7.5;
+        }
+        pptx.addSlide().addImage({ data: cv.toDataURL("image/png"), x: 0, y: 0, w, h });
+        await pptx.writeFile({ fileName: `${brandKey}-${exportLayout}-${exportSlug()}.pptx` });
+        toast("PPTX downloaded.");
+      });
+    }
+
+    // ── Copy to clipboard ──
+    // ClipboardItem gets a *promise* value and clipboard.write is called inside
+    // the click gesture, before the slow compose — required on Safari, where the
+    // gesture's transient activation would otherwise expire mid-render.
+    const CLIPBOARD_OK = window.isSecureContext && !!(navigator.clipboard && navigator.clipboard.write) && !!window.ClipboardItem;
+    function copyPng() {
+      return runExport($("copyBtn"), "Copying image…", async () => {
+        const blobPromise = (async () => {
+          const cv = await composeCurrent();
+          return new Promise(res => cv.toBlob(res, "image/png"));
+        })();
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": blobPromise })]);
+          toast("Image copied — paste into PowerPoint.");
+        } catch (e) {
+          console.error(e);
+          toast("Copy failed — use Export PNG instead.");
+        }
+      });
+    }
+
+    $("exportBtn").addEventListener("click", () =>
+      $("formatSelect").value === "pptx" ? exportPptx() : exportPng());
+    $("copyBtn").addEventListener("click", () => {
+      if (!CLIPBOARD_OK) { toast("Copy not supported here — use Export instead."); return; }
+      copyPng();
+    });
+    if (!CLIPBOARD_OK) $("copyBtn").hidden = true;
+
+    // ── Info dialog — on demand, plus auto-open on first visit ──
+    $("infoBtn").addEventListener("click", () => { $("infoModal").open = true; });
+    try {
+      if (!localStorage.getItem("eip-locator-seen")) {
+        localStorage.setItem("eip-locator-seen", "1");
+        setTimeout(() => { $("infoModal").open = true; }, 600);
+      }
+    } catch (e) { /* storage blocked (private mode) — skip auto-open */ }
+
+    // Brand the header immediately (view.when re-applies once the map is up) —
+    // otherwise the raw black-background logo flashes until the basemap loads.
+    applyBrand();
   </script>
 </body>
 </html>
