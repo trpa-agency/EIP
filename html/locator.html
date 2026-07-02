@@ -85,7 +85,10 @@
     .gj-status.err { color: #B3261E; }
     .sec-num { display: inline-flex; align-items: center; justify-content: center;
       width: 1.15rem; height: 1.15rem; border-radius: 50%;
-      background: var(--brand-primary); color: #fff; font-size: 0.66rem; }
+      background: var(--brand-primary); color: #fff; font-size: 0.66rem;
+      cursor: help; }   /* hover/focus shows the step's info pane */
+    .tip-text { display: block; max-width: 260px; font-size: 0.74rem; line-height: 1.5;
+      font-family: var(--brand-font); }
     .field { display: flex; flex-direction: column; gap: 0.25rem;
       font-size: 0.68rem; font-weight: 600; color: #8A93A3; }
     .field-hint { font-weight: 400; text-transform: none; letter-spacing: 0; }
@@ -139,23 +142,9 @@
     .layout-picker button:hover { border-color: var(--brand-primary); }
     .layout-picker button.active { border-color: var(--brand-primary); background: var(--gray-bg);
       box-shadow: inset 0 0 0 1px var(--brand-primary); }
-    .layout-picker svg { height: 38px; width: auto; flex-shrink: 0; display: block; }
     .layout-picker .lp-text { display: flex; flex-direction: column; gap: 1px; line-height: 1.2; }
     .layout-picker .lp-name { font-size: 0.78rem; font-weight: 700; color: var(--brand-dark); text-transform: none; letter-spacing: 0; }
     .layout-picker .lp-dims { font-size: 0.64rem; font-weight: 400; color: #8A93A3; text-transform: none; letter-spacing: 0; }
-    /* wireframe palette — driven by the live brand variables */
-    .lp-page   { fill: #fff; stroke: var(--gray-border); stroke-width: 1; }
-    .lp-mask   { fill: #6b7b96; }
-    .lp-basin  { fill: #fff; }
-    .lp-pin    { fill: var(--brand-primary); stroke: #fff; stroke-width: 0.7; }
-    .lp-ink    { fill: var(--brand-dark); }
-    .lp-muted  { fill: #C6CDD8; }
-    .lp-accent { fill: var(--brand-primary); }
-    .lp-accent2{ fill: var(--brand-primary); opacity: 0.35; }
-    .lp-map    { fill: #E7EBDF; }
-    .lp-road   { fill: none; stroke: #fff; stroke-width: 2; }
-    .lp-parcel { fill: rgba(241,96,34,0.18); stroke: var(--brand-accent); stroke-width: 1; }
-    .lp-cap    { fill: #fff; stroke: var(--gray-border); stroke-width: 0.6; }
     .cap-toggle { display: flex; align-items: center; gap: 0.35rem; font-size: 0.76rem;
       color: var(--brand-dark); margin-top: 0.2rem; }
     select.bm-select { font-family: var(--brand-font); font-size: 0.76rem; font-weight: 600;
@@ -242,7 +231,7 @@
     <aside id="sidePanel" aria-label="Map and export controls">
 
       <section class="panel-sec freeze">
-        <h2 class="sec-title"><span class="sec-num">1</span> Locations
+        <h2 class="sec-title"><span class="sec-num" id="secNum1" tabindex="0">1</span> Locations
           <button id="geojsonBtn" class="sec-tool" title="Paste GeoJSON (advanced)"
                   aria-label="Paste GeoJSON (advanced)">
             <calcite-icon icon="code" scale="s"></calcite-icon>
@@ -265,7 +254,7 @@
       </section>
 
       <section class="panel-sec freeze">
-        <h2 class="sec-title"><span class="sec-num">2</span> Map view</h2>
+        <h2 class="sec-title"><span class="sec-num" id="secNum2" tabindex="0">2</span> Map view</h2>
         <label class="field">Basemap <span class="field-hint">(detail map)</span>
           <select class="bm-select" id="basemapSelect">
             <option value="imagery" selected>Imagery + Labels</option>
@@ -285,9 +274,9 @@
       </section>
 
       <section class="panel-sec">
-        <h2 class="sec-title"><span class="sec-num">3</span> Export</h2>
+        <h2 class="sec-title"><span class="sec-num" id="secNum3" tabindex="0">3</span> Export</h2>
         <div class="freeze">
-          <label class="field">Brand
+          <label class="field">Style
             <div class="seg seg-fill" id="brandSeg">
               <button data-brand="eip" class="active">EIP</button>
               <button data-brand="trpa">TRPA</button>
@@ -296,40 +285,14 @@
           <label class="field">Layout
             <div class="layout-picker" id="layoutSeg" role="radiogroup" aria-label="Export layout">
               <button data-layout="slide" class="active" role="radio" aria-checked="true">
-                <svg viewBox="0 0 64 36" aria-hidden="true">
-                  <rect x="0" y="0" width="64" height="36" rx="2" class="lp-page"/>
-                  <rect x="5" y="6" width="10" height="4" rx="1" class="lp-accent2"/>
-                  <rect x="5" y="16" width="22" height="4" rx="1" class="lp-ink"/>
-                  <rect x="5" y="22" width="16" height="2.5" rx="1" class="lp-muted"/>
-                  <rect x="36" y="3" width="25" height="30" class="lp-mask"/>
-                  <path d="M46 8 C50 8 52 12 51 16 C53 19 52 24 49 28 C47 31 45 29 44 26 C42 21 41 15 43 11 C44 8 45 8 46 8 Z" class="lp-basin"/>
-                  <circle cx="48" cy="13" r="2.2" class="lp-pin"/>
-                  <rect x="5" y="30" width="52" height="1.6" class="lp-accent"/>
-                </svg>
                 <span class="lp-text"><span class="lp-name">Title Slide</span>
                   <span class="lp-dims">Text + basin map · 16:9</span></span>
               </button>
               <button data-layout="split" role="radio" aria-checked="false">
-                <svg viewBox="0 0 64 36" aria-hidden="true">
-                  <rect x="0" y="0" width="64" height="36" rx="2" class="lp-page"/>
-                  <rect x="0" y="0" width="42" height="36" class="lp-map"/>
-                  <path d="M8 26 L18 12 L26 20 L34 8" class="lp-road"/>
-                  <path d="M20 18 l6 -3 l3 6 l-7 3 Z" class="lp-parcel"/>
-                  <circle cx="24" cy="20" r="2.4" class="lp-pin"/>
-                  <rect x="43" y="0" width="21" height="36" class="lp-mask"/>
-                  <path d="M52 6 C56 6 58 11 57 16 C59 20 58 26 54 31 C52 34 50 32 49 28 C47 22 46 15 48 10 C49 7 50 6 52 6 Z" class="lp-basin"/>
-                  <circle cx="53" cy="11" r="2" class="lp-pin"/>
-                </svg>
                 <span class="lp-text"><span class="lp-name">Detail + Basin</span>
                   <span class="lp-dims">Close-up beside basin · 16:9</span></span>
               </button>
               <button data-layout="locator" role="radio" aria-checked="false">
-                <svg viewBox="0 0 28 36" aria-hidden="true">
-                  <rect x="0" y="0" width="28" height="36" rx="2" class="lp-mask"/>
-                  <path d="M13 4 C18 4 20 10 19 16 C21 20 20 26 16 30 C14 33 11 31 10 27 C8 21 7 13 9 8 C10 5 11 4 13 4 Z" class="lp-basin"/>
-                  <circle cx="16" cy="9" r="2.2" class="lp-pin"/>
-                  <rect x="0" y="31" width="28" height="5" class="lp-cap"/>
-                </svg>
                 <span class="lp-text"><span class="lp-name">Basin Only</span>
                   <span class="lp-dims">Full basin, portrait · 8.5×11</span></span>
               </button>
@@ -369,6 +332,25 @@
 
   <div id="basinDiv"></div>
 
+  <!-- ── Hover help for each workflow step (anchored to the number badges) ── -->
+  <calcite-tooltip reference-element="secNum1" placement="right" close-on-click>
+    <span class="tip-text">Add up to 9 locations, each with a numbered pin. Search an
+      <strong>address</strong>, <strong>APN</strong>, <strong>EIP project</strong> (name or
+      number), or <strong>coordinates</strong> ("39.0968, -119.9435"). Advanced: the
+      ⟨⟩ button pastes GeoJSON. Remove a location with its chip.</span>
+  </calcite-tooltip>
+  <calcite-tooltip reference-element="secNum2" placement="right" close-on-click>
+    <span class="tip-text">The <strong>basemap</strong> and <strong>detail zoom</strong> set the
+      close-up map used by the <em>Detail + Basin</em> layout. Draw tools (pencil on the map)
+      add annotations to that view; Home returns to the Tahoe Basin.</span>
+  </calcite-tooltip>
+  <calcite-tooltip reference-element="secNum3" placement="right" close-on-click>
+    <span class="tip-text"><strong>Title Slide</strong> — text block + basin map (16:9).
+      <strong>Detail + Basin</strong> — close-up beside the basin locator (16:9).
+      <strong>Basin Only</strong> — full-basin portrait page (8.5×11).
+      <em>Caption</em> adds the styled text strip; export as PNG or PPTX, or copy to the clipboard.</span>
+  </calcite-tooltip>
+
   <!-- ── Paste GeoJSON (advanced) ── -->
   <calcite-dialog id="geojsonModal" modal heading="Paste GeoJSON" width-scale="s">
     <div class="gj-content">
@@ -405,12 +387,11 @@
           (top-right of the map) add annotations that appear in that panel too;
           <span class="ui-sample ui-btn square"><calcite-icon icon="home" scale="s"></calcite-icon></span>
           returns to the Tahoe Basin.</li>
-        <li><strong>Pick brand and layout</strong> —
+        <li><strong>Pick style and layout</strong> —
           <span class="ui-sample ui-seg"><span class="on">EIP</span><span>TRPA</span></span> and a layout:
           <em>Title Slide</em> (text + basin map, 16:9), <em>Detail + Basin</em> (close-up
           beside the basin locator, 16:9), or <em>Basin Only</em> (full basin, portrait
-          8.5×11) — each option shows a preview of its arrangement. Toggle
-          <em>Caption</em> for the branded text strip.</li>
+          8.5×11). Toggle <em>Caption</em> for the styled text strip.</li>
         <li><strong>Export</strong> — choose <span class="ui-sample ui-chip">PNG ▾</span> or
           PowerPoint (.pptx), then
           <span class="ui-sample ui-btn solid"><calcite-icon icon="download" scale="s"></calcite-icon> Export</span>,
@@ -1423,6 +1404,13 @@
     $("panelToggle").addEventListener("click", () => {
       const collapsed = document.body.classList.toggle("panel-collapsed");
       $("panelToggleIcon").icon = collapsed ? "chevron-right" : "chevron-left";
+    });
+
+    // ── Step tooltips — resolve reference elements programmatically
+    // (Calcite 5 doesn't reliably resolve the reference-element id attribute) ──
+    document.querySelectorAll("calcite-tooltip[reference-element]").forEach(t => {
+      const el = document.getElementById(t.getAttribute("reference-element"));
+      if (el) t.referenceElement = el;
     });
 
     // ── Info dialog — on demand, plus auto-open on first visit ──
