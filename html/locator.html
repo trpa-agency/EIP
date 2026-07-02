@@ -151,6 +151,20 @@
       color: var(--brand-dark); border: 1px solid var(--gray-border); border-radius: 7px;
       padding: 0.35rem 0.5rem; background: #fff; cursor: pointer; }
 
+    /* Basemap thumbnail buttons (2×2) */
+    .bm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+    .bm-btn { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.3rem;
+      border: 1.5px solid var(--gray-border); border-radius: 8px; background: #fff;
+      cursor: pointer; font-family: var(--brand-font); font-size: 0.68rem; font-weight: 600;
+      color: #6B7688; }
+    .bm-btn img { width: 100%; height: 46px; object-fit: cover; border-radius: 5px; display: block; }
+    .bm-btn:hover { border-color: var(--brand-primary); }
+    .bm-btn.active { border-color: var(--brand-primary); color: var(--brand-dark);
+      box-shadow: inset 0 0 0 1px var(--brand-primary); }
+
+    /* Header quick-links */
+    .hdr-links { display: flex; align-items: center; gap: 0.15rem; }
+
     /* Info modal content */
     .info-content { font-size: 0.88rem; line-height: 1.7; color: var(--brand-dark); }
     .info-content p { margin: 0 0 0.7rem; }
@@ -179,6 +193,7 @@
     @media (max-width: 760px) {
       .hdr-brand .hagency { display: none; }
       .hdr-brand img { height: 30px; }
+      .link-label { display: none; }   /* header links go icon-only on small screens */
       #appBody { flex-direction: column; }
       #sidePanel { flex: 0 0 auto; max-height: 45vh; border-right: none;
         border-bottom: 1px solid var(--gray-border); }
@@ -222,8 +237,16 @@
         <span class="hname">Project Locator</span>
       </div>
     </div>
-    <calcite-button id="infoBtn" icon-start="information" appearance="transparent" kind="neutral" scale="s"
-      title="About this tool" label="About this tool"></calcite-button>
+    <div class="hdr-links">
+      <calcite-button href="https://trpa-agency.github.io/EIP/html/projects-map.html" target="_blank" rel="noopener"
+        icon-start="launch" appearance="transparent" kind="neutral" scale="s"
+        title="Open the EIP Projects Map in a new window"><span class="link-label">Projects Map</span></calcite-button>
+      <calcite-button href="https://gis.trpa.org/PermitReview/" target="_blank" rel="noopener"
+        icon-start="launch" appearance="transparent" kind="neutral" scale="s"
+        title="Open the Permit Review Map in a new window"><span class="link-label">Permit Review</span></calcite-button>
+      <calcite-button id="infoBtn" icon-start="information" appearance="transparent" kind="neutral" scale="s"
+        title="About this tool" label="About this tool"></calcite-button>
+    </div>
   </header>
 
   <div id="appBody">
@@ -255,61 +278,83 @@
 
       <section class="panel-sec freeze">
         <h2 class="sec-title"><span class="sec-num" id="secNum2" tabindex="0">2</span> Map view</h2>
-        <label class="field">Basemap <span class="field-hint">(detail map)</span>
-          <select class="bm-select" id="basemapSelect">
-            <option value="imagery" selected>Imagery + Labels</option>
-            <option value="terrain">Terrain + Labels</option>
-            <option value="humangeo">Human Geography</option>
-            <option value="plain">Plain</option>
-          </select>
-        </label>
+        <label class="field">Basemap <span class="field-hint">(detail map)</span></label>
+        <div class="bm-grid" id="basemapSeg" role="radiogroup" aria-label="Basemap">
+          <button data-value="imagery" class="bm-btn active" role="radio" aria-checked="true">
+            <img src="https://www.arcgis.com/sharing/rest/content/items/9e557abc61ce41c9b8ec8b15800c20d3/info/thumbnail/thumbnail1578325626861.jpeg"
+                 alt="" loading="lazy" onerror="this.hidden=true" />
+            <span>Imagery</span>
+          </button>
+          <button data-value="terrain" class="bm-btn" role="radio" aria-checked="false">
+            <img src="https://www.arcgis.com/sharing/rest/content/items/a52ab98763904006aa382d90e906fdd5/info/thumbnail/thumbnail1561651343086.jpeg"
+                 alt="" loading="lazy" onerror="this.hidden=true" />
+            <span>Terrain</span>
+          </button>
+          <button data-value="humangeo" class="bm-btn" role="radio" aria-checked="false">
+            <img src="https://www.arcgis.com/sharing/rest/content/items/3582b744bba84668b52a16b0b6942544/info/thumbnail/thumbnail1579117155225.jpeg"
+                 alt="" loading="lazy" onerror="this.hidden=true" />
+            <span>Human Geo</span>
+          </button>
+          <button data-value="plain" class="bm-btn" role="radio" aria-checked="false">
+            <img src="https://www.arcgis.com/sharing/rest/content/items/979c6cc89af9449cbeb5342a439c6a76/info/thumbnail/thumbnail1561344648408.jpeg"
+                 alt="" loading="lazy" onerror="this.hidden=true" />
+            <span>Plain</span>
+          </button>
+        </div>
         <label class="field">Detail zoom
-          <select class="bm-select" id="scaleSelect">
-            <option value="fit">Fit parcel</option>
-            <option value="5000">1:5,000</option>
-            <option value="24000">1:24,000</option>
-            <option value="125000">1:125,000</option>
-          </select>
+          <div class="seg seg-fill" id="scaleSeg" role="radiogroup" aria-label="Detail zoom">
+            <button data-value="fit" class="active" role="radio" aria-checked="true">Fit</button>
+            <button data-value="5000" role="radio" aria-checked="false">1:5k</button>
+            <button data-value="24000" role="radio" aria-checked="false">1:24k</button>
+            <button data-value="125000" role="radio" aria-checked="false">1:125k</button>
+          </div>
+        </label>
+      </section>
+
+      <section class="panel-sec freeze">
+        <h2 class="sec-title"><span class="sec-num" id="secNum3" tabindex="0">3</span> Style &amp; layout</h2>
+        <label class="field">Style
+          <div class="seg seg-fill" id="brandSeg">
+            <button data-brand="eip" class="active">EIP</button>
+            <button data-brand="trpa">TRPA</button>
+          </div>
+        </label>
+        <label class="field">Layout
+          <div class="layout-picker" id="layoutSeg" role="radiogroup" aria-label="Export layout">
+            <button data-layout="slide" class="active" role="radio" aria-checked="true">
+              <span class="lp-text"><span class="lp-name">Title Slide</span>
+                <span class="lp-dims">Text + basin map · 16:9</span></span>
+            </button>
+            <button data-layout="split" role="radio" aria-checked="false">
+              <span class="lp-text"><span class="lp-name">Detail + Basin</span>
+                <span class="lp-dims">Close-up beside basin · 16:9</span></span>
+            </button>
+            <button data-layout="locator" role="radio" aria-checked="false">
+              <span class="lp-text"><span class="lp-name">Basin Only</span>
+                <span class="lp-dims">Full basin, portrait · 8.5×11</span></span>
+            </button>
+          </div>
         </label>
       </section>
 
       <section class="panel-sec">
-        <h2 class="sec-title"><span class="sec-num" id="secNum3" tabindex="0">3</span> Export</h2>
+        <h2 class="sec-title"><span class="sec-num" id="secNum4" tabindex="0">4</span> Export</h2>
         <div class="freeze">
-          <label class="field">Style
-            <div class="seg seg-fill" id="brandSeg">
-              <button data-brand="eip" class="active">EIP</button>
-              <button data-brand="trpa">TRPA</button>
+          <label class="field">Format
+            <div class="seg seg-fill" id="formatSeg" role="radiogroup" aria-label="Export format">
+              <button data-value="png" class="active" role="radio" aria-checked="true">PNG</button>
+              <button data-value="pptx" role="radio" aria-checked="false">PPTX</button>
             </div>
           </label>
-          <label class="field">Layout
-            <div class="layout-picker" id="layoutSeg" role="radiogroup" aria-label="Export layout">
-              <button data-layout="slide" class="active" role="radio" aria-checked="true">
-                <span class="lp-text"><span class="lp-name">Title Slide</span>
-                  <span class="lp-dims">Text + basin map · 16:9</span></span>
-              </button>
-              <button data-layout="split" role="radio" aria-checked="false">
-                <span class="lp-text"><span class="lp-name">Detail + Basin</span>
-                  <span class="lp-dims">Close-up beside basin · 16:9</span></span>
-              </button>
-              <button data-layout="locator" role="radio" aria-checked="false">
-                <span class="lp-text"><span class="lp-name">Basin Only</span>
-                  <span class="lp-dims">Full basin, portrait · 8.5×11</span></span>
-              </button>
-            </div>
-          </label>
-          <label class="cap-toggle" title="Include the branded caption strip in the export">
+          <label class="cap-toggle" title="Include the styled caption strip in the export">
             <calcite-switch id="capSwitch" checked scale="s"></calcite-switch> Caption
           </label>
         </div>
         <div class="export-row">
-          <select class="bm-select" id="formatSelect" title="Export format">
-            <option value="png">PNG</option>
-            <option value="pptx">PPTX</option>
-          </select>
           <calcite-button id="copyBtn" icon-start="copy-to-clipboard" appearance="outline" kind="brand" scale="s" disabled
-            title="Copy image to clipboard" label="Copy image to clipboard"></calcite-button>
-          <calcite-button id="exportBtn" icon-start="download" appearance="solid" kind="brand" scale="s" disabled width="full">Export</calcite-button>
+            width="full" title="Copy image to clipboard">Copy</calcite-button>
+          <calcite-button id="exportBtn" icon-start="save" appearance="solid" kind="brand" scale="s" disabled
+            width="full">Save</calcite-button>
         </div>
       </section>
     </aside>
@@ -345,10 +390,15 @@
       add annotations to that view; Home returns to the Tahoe Basin.</span>
   </calcite-tooltip>
   <calcite-tooltip reference-element="secNum3" placement="right" close-on-click>
-    <span class="tip-text"><strong>Title Slide</strong> — text block + basin map (16:9).
-      <strong>Detail + Basin</strong> — close-up beside the basin locator (16:9).
-      <strong>Basin Only</strong> — full-basin portrait page (8.5×11).
-      <em>Caption</em> adds the styled text strip; export as PNG or PPTX, or copy to the clipboard.</span>
+    <span class="tip-text"><strong>Style</strong> picks the EIP or TRPA look (logo, colors, pin).
+      <strong>Layout</strong>: <em>Title Slide</em> — text block + basin map (16:9);
+      <em>Detail + Basin</em> — close-up beside the basin locator (16:9);
+      <em>Basin Only</em> — full-basin portrait page (8.5×11).</span>
+  </calcite-tooltip>
+  <calcite-tooltip reference-element="secNum4" placement="right" close-on-click>
+    <span class="tip-text"><strong>Save</strong> downloads the map as a PNG image or a PowerPoint
+      slide (PPTX); <strong>Copy</strong> puts the image on the clipboard to paste straight into
+      a slide. <em>Caption</em> adds the styled text strip with the location details.</span>
   </calcite-tooltip>
 
   <!-- ── Paste GeoJSON (advanced) ── -->
@@ -379,10 +429,9 @@
           (numbered pins). Remove one with its chip, or clear the search to start over.
           Advanced: the <span class="ui-sample ui-btn square"><calcite-icon icon="code" scale="s"></calcite-icon></span>
           button pastes GeoJSON directly.</li>
-        <li><strong>Set the detail view</strong> — the basemap
-          <span class="ui-sample ui-chip">Terrain + Labels ▾</span> and zoom
-          <span class="ui-sample ui-chip">Fit parcel ▾</span> selectors control the
-          <em>Detail + Basin</em> layout's close-up panel. The draw tools
+        <li><strong>Set the detail view</strong> — the basemap thumbnails and zoom buttons
+          <span class="ui-sample ui-seg"><span class="on">Fit</span><span>1:5k</span><span>1:24k</span></span>
+          control the <em>Detail + Basin</em> layout's close-up panel. The draw tools
           <span class="ui-sample ui-btn square"><calcite-icon icon="pencil" scale="s"></calcite-icon></span>
           (top-right of the map) add annotations that appear in that panel too;
           <span class="ui-sample ui-btn square"><calcite-icon icon="home" scale="s"></calcite-icon></span>
@@ -392,11 +441,11 @@
           <em>Title Slide</em> (text + basin map, 16:9), <em>Detail + Basin</em> (close-up
           beside the basin locator, 16:9), or <em>Basin Only</em> (full basin, portrait
           8.5×11). Toggle <em>Caption</em> for the styled text strip.</li>
-        <li><strong>Export</strong> — choose <span class="ui-sample ui-chip">PNG ▾</span> or
-          PowerPoint (.pptx), then
-          <span class="ui-sample ui-btn solid"><calcite-icon icon="download" scale="s"></calcite-icon> Export</span>,
-          or <span class="ui-sample ui-btn outline"><calcite-icon icon="copy-to-clipboard" scale="s"></calcite-icon></span>
-          copies the image straight to the clipboard to paste onto a slide.</li>
+        <li><strong>Export</strong> — pick
+          <span class="ui-sample ui-seg"><span class="on">PNG</span><span>PPTX</span></span> and
+          <span class="ui-sample ui-btn solid"><calcite-icon icon="save" scale="s"></calcite-icon> Save</span>,
+          or <span class="ui-sample ui-btn outline"><calcite-icon icon="copy-to-clipboard" scale="s"></calcite-icon> Copy</span>
+          puts the image on the clipboard to paste onto a slide.</li>
       </ol>
       <p class="info-fine">Parcel data: TRPA GIS · Home button returns to the Tahoe Basin.</p>
     </div>
@@ -974,13 +1023,21 @@
         x.setAttribute("aria-checked", x === btn ? "true" : "false");
       });
     });
-    $("basemapSelect").addEventListener("change", (e) => {
-      map.basemap = makeBasemap(e.target.value);
-    });
+    // Small helper: radiogroup-of-buttons behavior (active class + aria-checked).
+    function wireSeg(id, onPick) {
+      $(id).addEventListener("click", (e) => {
+        const btn = e.target.closest("button"); if (!btn) return;
+        $(id).querySelectorAll("button").forEach(x => {
+          x.classList.toggle("active", x === btn);
+          x.setAttribute("aria-checked", x === btn ? "true" : "false");
+        });
+        onPick(btn.dataset.value);
+      });
+    }
+    wireSeg("basemapSeg", (v) => { map.basemap = makeBasemap(v); });
     // Detail-map zoom: "fit" frames the location(s); a scale value zooms to that
     // fixed scale centered on the locations (or current view center if none).
-    $("scaleSelect").addEventListener("change", (e) => {
-      const v = e.target.value;
+    wireSeg("scaleSeg", (v) => {
       if (v === "fit") {
         if (locations.length) zoomToLocations();
         else view.goTo({ center: BASIN.center, zoom: BASIN.zoom }, { duration: 500 });
@@ -989,6 +1046,8 @@
         view.goTo({ target: ext ? ext.center : view.center, scale: +v }, { duration: 500 });
       }
     });
+    let exportFormat = "png";
+    wireSeg("formatSeg", (v) => { exportFormat = v; });
 
     // ───────────── Export ─────────────
     function loadImage(src) { return new Promise((res, rej) => { const im = new Image();
@@ -1393,7 +1452,7 @@
     }
 
     $("exportBtn").addEventListener("click", () =>
-      $("formatSelect").value === "pptx" ? exportPptx() : exportPng());
+      exportFormat === "pptx" ? exportPptx() : exportPng());
     $("copyBtn").addEventListener("click", () => {
       if (!CLIPBOARD_OK) { toast("Copy not supported here — use Export instead."); return; }
       copyPng();
