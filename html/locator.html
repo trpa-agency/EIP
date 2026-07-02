@@ -68,9 +68,27 @@
     .sec-title { display: flex; align-items: center; gap: 0.45rem; margin: 0;
       font-size: 0.68rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
       color: #6B7688; }
+    .sec-tool { margin-left: auto; border: none; background: transparent; cursor: pointer;
+      color: #A6AFBD; padding: 0.1rem 0.2rem; border-radius: 5px; line-height: 0; }
+    .sec-tool:hover { color: var(--brand-primary); background: var(--gray-bg); }
+
+    /* Paste-GeoJSON dialog */
+    .gj-content { display: flex; flex-direction: column; gap: 0.6rem; }
+    .gj-hint { margin: 0; font-size: 0.78rem; color: #6B7688; line-height: 1.5; }
+    .gj-hint code { background: var(--gray-bg); padding: 0 0.25rem; border-radius: 4px; font-size: 0.72rem; }
+    #geojsonText { width: 100%; min-height: 180px; resize: vertical; font-family: Consolas, monospace;
+      font-size: 0.72rem; border: 1.5px solid var(--gray-border); border-radius: 8px; padding: 0.5rem;
+      color: var(--brand-dark); }
+    #geojsonText:focus { outline: none; border-color: var(--brand-primary); }
+    .gj-status { font-size: 0.74rem; min-height: 1.1em; color: #6B7688; }
+    .gj-status.ok { color: #2E7D32; }
+    .gj-status.err { color: #B3261E; }
     .sec-num { display: inline-flex; align-items: center; justify-content: center;
       width: 1.15rem; height: 1.15rem; border-radius: 50%;
-      background: var(--brand-primary); color: #fff; font-size: 0.66rem; }
+      background: var(--brand-primary); color: #fff; font-size: 0.66rem;
+      cursor: help; }   /* hover/focus shows the step's info pane */
+    .tip-text { display: block; max-width: 260px; font-size: 0.74rem; line-height: 1.5;
+      font-family: var(--brand-font); }
     .field { display: flex; flex-direction: column; gap: 0.25rem;
       font-size: 0.68rem; font-weight: 600; color: #8A93A3; }
     .field-hint { font-weight: 400; text-transform: none; letter-spacing: 0; }
@@ -112,11 +130,40 @@
     .seg button { border: none; background: #fff; cursor: pointer; font-family: var(--brand-font);
       font-size: 0.76rem; font-weight: 600; color: #6B7688; padding: 0.35rem 0.65rem; transition: all 120ms; }
     .seg button.active { background: var(--brand-primary); color: #fff; }
+
+    /* Layout picker — vertical options with always-visible wireframe previews */
+    .layout-picker { display: flex; flex-direction: column; gap: 0.4rem; }
+    .layout-picker button {
+      display: flex; align-items: center; gap: 0.6rem; text-align: left; cursor: pointer;
+      font-family: var(--brand-font); background: #fff;
+      border: 1.5px solid var(--gray-border); border-radius: 8px; padding: 0.4rem 0.55rem;
+      transition: border-color 120ms, background 120ms;
+    }
+    .layout-picker button:hover { border-color: var(--brand-primary); }
+    .layout-picker button.active { border-color: var(--brand-primary); background: var(--gray-bg);
+      box-shadow: inset 0 0 0 1px var(--brand-primary); }
+    .layout-picker .lp-text { display: flex; flex-direction: column; gap: 1px; line-height: 1.2; }
+    .layout-picker .lp-name { font-size: 0.78rem; font-weight: 700; color: var(--brand-dark); text-transform: none; letter-spacing: 0; }
+    .layout-picker .lp-dims { font-size: 0.64rem; font-weight: 400; color: #8A93A3; text-transform: none; letter-spacing: 0; }
     .cap-toggle { display: flex; align-items: center; gap: 0.35rem; font-size: 0.76rem;
       color: var(--brand-dark); margin-top: 0.2rem; }
     select.bm-select { font-family: var(--brand-font); font-size: 0.76rem; font-weight: 600;
       color: var(--brand-dark); border: 1px solid var(--gray-border); border-radius: 7px;
       padding: 0.35rem 0.5rem; background: #fff; cursor: pointer; }
+
+    /* Basemap thumbnail buttons (2×2) */
+    .bm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+    .bm-btn { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.3rem;
+      border: 1.5px solid var(--gray-border); border-radius: 8px; background: #fff;
+      cursor: pointer; font-family: var(--brand-font); font-size: 0.68rem; font-weight: 600;
+      color: #6B7688; }
+    .bm-btn img { width: 100%; height: 46px; object-fit: cover; border-radius: 5px; display: block; }
+    .bm-btn:hover { border-color: var(--brand-primary); }
+    .bm-btn.active { border-color: var(--brand-primary); color: var(--brand-dark);
+      box-shadow: inset 0 0 0 1px var(--brand-primary); }
+
+    /* Header quick-links */
+    .hdr-links { display: flex; align-items: center; gap: 0.15rem; }
 
     /* Info modal content */
     .info-content { font-size: 0.88rem; line-height: 1.7; color: var(--brand-dark); }
@@ -146,6 +193,7 @@
     @media (max-width: 760px) {
       .hdr-brand .hagency { display: none; }
       .hdr-brand img { height: 30px; }
+      .link-label { display: none; }   /* header links go icon-only on small screens */
       #appBody { flex-direction: column; }
       #sidePanel { flex: 0 0 auto; max-height: 45vh; border-right: none;
         border-bottom: 1px solid var(--gray-border); }
@@ -189,8 +237,16 @@
         <span class="hname">Project Locator</span>
       </div>
     </div>
-    <calcite-button id="infoBtn" icon-start="information" appearance="transparent" kind="neutral" scale="s"
-      title="About this tool" label="About this tool"></calcite-button>
+    <div class="hdr-links">
+      <calcite-button href="https://trpa-agency.github.io/EIP/html/projects-map.html" target="_blank" rel="noopener"
+        icon-start="launch" appearance="transparent" kind="neutral" scale="s"
+        title="Open the EIP Projects Map in a new window"><span class="link-label">Projects Map</span></calcite-button>
+      <calcite-button href="https://gis.trpa.org/PermitReview/" target="_blank" rel="noopener"
+        icon-start="launch" appearance="transparent" kind="neutral" scale="s"
+        title="Open the Permit Review Map in a new window"><span class="link-label">Permit Review</span></calcite-button>
+      <calcite-button id="infoBtn" icon-start="information" appearance="transparent" kind="neutral" scale="s"
+        title="About this tool" label="About this tool"></calcite-button>
+    </div>
   </header>
 
   <div id="appBody">
@@ -198,7 +254,12 @@
     <aside id="sidePanel" aria-label="Map and export controls">
 
       <section class="panel-sec freeze">
-        <h2 class="sec-title"><span class="sec-num">1</span> Locations</h2>
+        <h2 class="sec-title"><span class="sec-num" id="secNum1" tabindex="0">1</span> Locations
+          <button id="geojsonBtn" class="sec-tool" title="Paste GeoJSON (advanced)"
+                  aria-label="Paste GeoJSON (advanced)">
+            <calcite-icon icon="code" scale="s"></calcite-icon>
+          </button>
+        </h2>
         <div class="hdr-search">
           <div class="search-box">
             <calcite-icon icon="search" scale="s"></calcite-icon>
@@ -216,53 +277,84 @@
       </section>
 
       <section class="panel-sec freeze">
-        <h2 class="sec-title"><span class="sec-num">2</span> Map view</h2>
-        <label class="field">Basemap <span class="field-hint">(Split close-up)</span>
-          <select class="bm-select" id="basemapSelect">
-            <option value="terrain">Terrain + Labels</option>
-            <option value="imagery">Imagery + Labels</option>
-            <option value="humangeo">Human Geography</option>
-            <option value="plain">Plain</option>
-          </select>
-        </label>
+        <h2 class="sec-title"><span class="sec-num" id="secNum2" tabindex="0">2</span> Map view</h2>
+        <label class="field">Basemap <span class="field-hint">(detail map)</span></label>
+        <div class="bm-grid" id="basemapSeg" role="radiogroup" aria-label="Basemap">
+          <button data-value="imagery" class="bm-btn active" role="radio" aria-checked="true">
+            <img src="https://www.arcgis.com/sharing/rest/content/items/9e557abc61ce41c9b8ec8b15800c20d3/info/thumbnail/thumbnail1578325626861.jpeg"
+                 alt="" loading="lazy" onerror="this.hidden=true" />
+            <span>Imagery</span>
+          </button>
+          <button data-value="terrain" class="bm-btn" role="radio" aria-checked="false">
+            <img src="https://www.arcgis.com/sharing/rest/content/items/a52ab98763904006aa382d90e906fdd5/info/thumbnail/thumbnail1561651343086.jpeg"
+                 alt="" loading="lazy" onerror="this.hidden=true" />
+            <span>Terrain</span>
+          </button>
+          <button data-value="humangeo" class="bm-btn" role="radio" aria-checked="false">
+            <img src="https://www.arcgis.com/sharing/rest/content/items/3582b744bba84668b52a16b0b6942544/info/thumbnail/thumbnail1579117155225.jpeg"
+                 alt="" loading="lazy" onerror="this.hidden=true" />
+            <span>Human Geo</span>
+          </button>
+          <button data-value="plain" class="bm-btn" role="radio" aria-checked="false">
+            <img src="https://www.arcgis.com/sharing/rest/content/items/979c6cc89af9449cbeb5342a439c6a76/info/thumbnail/thumbnail1561344648408.jpeg"
+                 alt="" loading="lazy" onerror="this.hidden=true" />
+            <span>Plain</span>
+          </button>
+        </div>
         <label class="field">Detail zoom
-          <select class="bm-select" id="scaleSelect">
-            <option value="fit">Fit parcel</option>
-            <option value="5000">1:5,000</option>
-            <option value="24000">1:24,000</option>
-            <option value="125000">1:125,000</option>
-          </select>
+          <div class="seg seg-fill" id="scaleSeg" role="radiogroup" aria-label="Detail zoom">
+            <button data-value="fit" class="active" role="radio" aria-checked="true">Fit</button>
+            <button data-value="5000" role="radio" aria-checked="false">1:5k</button>
+            <button data-value="24000" role="radio" aria-checked="false">1:24k</button>
+            <button data-value="125000" role="radio" aria-checked="false">1:125k</button>
+          </div>
+        </label>
+      </section>
+
+      <section class="panel-sec freeze">
+        <h2 class="sec-title"><span class="sec-num" id="secNum3" tabindex="0">3</span> Style &amp; layout</h2>
+        <label class="field">Style
+          <div class="seg seg-fill" id="brandSeg">
+            <button data-brand="eip" class="active">EIP</button>
+            <button data-brand="trpa">TRPA</button>
+          </div>
+        </label>
+        <label class="field">Layout
+          <div class="layout-picker" id="layoutSeg" role="radiogroup" aria-label="Export layout">
+            <button data-layout="slide" class="active" role="radio" aria-checked="true">
+              <span class="lp-text"><span class="lp-name">Title Slide</span>
+                <span class="lp-dims">Text + basin map · 16:9</span></span>
+            </button>
+            <button data-layout="split" role="radio" aria-checked="false">
+              <span class="lp-text"><span class="lp-name">Detail + Basin</span>
+                <span class="lp-dims">Close-up beside basin · 16:9</span></span>
+            </button>
+            <button data-layout="locator" role="radio" aria-checked="false">
+              <span class="lp-text"><span class="lp-name">Basin Only</span>
+                <span class="lp-dims">Full basin, portrait · 8.5×11</span></span>
+            </button>
+          </div>
         </label>
       </section>
 
       <section class="panel-sec">
-        <h2 class="sec-title"><span class="sec-num">3</span> Export</h2>
+        <h2 class="sec-title"><span class="sec-num" id="secNum4" tabindex="0">4</span> Export</h2>
         <div class="freeze">
-          <label class="field">Brand
-            <div class="seg seg-fill" id="brandSeg">
-              <button data-brand="eip" class="active">EIP</button>
-              <button data-brand="trpa">TRPA</button>
+          <label class="field">Format
+            <div class="seg seg-fill" id="formatSeg" role="radiogroup" aria-label="Export format">
+              <button data-value="png" class="active" role="radio" aria-checked="true">PNG</button>
+              <button data-value="pptx" role="radio" aria-checked="false">PPTX</button>
             </div>
           </label>
-          <label class="field">Layout
-            <div class="seg seg-fill" id="layoutSeg">
-              <button data-layout="slide" class="active">Slide</button>
-              <button data-layout="split">Split</button>
-              <button data-layout="locator">Locator</button>
-            </div>
-          </label>
-          <label class="cap-toggle" title="Include the branded caption strip in the export">
+          <label class="cap-toggle" title="Include the styled caption strip in the export">
             <calcite-switch id="capSwitch" checked scale="s"></calcite-switch> Caption
           </label>
         </div>
         <div class="export-row">
-          <select class="bm-select" id="formatSelect" title="Export format">
-            <option value="png">PNG</option>
-            <option value="pptx">PPTX</option>
-          </select>
           <calcite-button id="copyBtn" icon-start="copy-to-clipboard" appearance="outline" kind="brand" scale="s" disabled
-            title="Copy image to clipboard" label="Copy image to clipboard"></calcite-button>
-          <calcite-button id="exportBtn" icon-start="download" appearance="solid" kind="brand" scale="s" disabled width="full">Export</calcite-button>
+            width="full" title="Copy image to clipboard">Copy</calcite-button>
+          <calcite-button id="exportBtn" icon-start="save" appearance="solid" kind="brand" scale="s" disabled
+            width="full">Save</calcite-button>
         </div>
       </section>
     </aside>
@@ -285,6 +377,45 @@
 
   <div id="basinDiv"></div>
 
+  <!-- ── Hover help for each workflow step (anchored to the number badges) ── -->
+  <calcite-tooltip reference-element="secNum1" placement="right" close-on-click>
+    <span class="tip-text">Add up to 9 locations, each with a numbered pin. Search an
+      <strong>address</strong>, <strong>APN</strong>, <strong>EIP project</strong> (name or
+      number), or <strong>coordinates</strong> ("39.0968, -119.9435"). Advanced: the
+      ⟨⟩ button pastes GeoJSON. Remove a location with its chip.</span>
+  </calcite-tooltip>
+  <calcite-tooltip reference-element="secNum2" placement="right" close-on-click>
+    <span class="tip-text">The <strong>basemap</strong> and <strong>detail zoom</strong> set the
+      close-up map used by the <em>Detail + Basin</em> layout. Draw tools (pencil on the map)
+      add annotations to that view; Home returns to the Tahoe Basin.</span>
+  </calcite-tooltip>
+  <calcite-tooltip reference-element="secNum3" placement="right" close-on-click>
+    <span class="tip-text"><strong>Style</strong> picks the EIP or TRPA look (logo, colors, pin).
+      <strong>Layout</strong>: <em>Title Slide</em> — text block + basin map (16:9);
+      <em>Detail + Basin</em> — close-up beside the basin locator (16:9);
+      <em>Basin Only</em> — full-basin portrait page (8.5×11).</span>
+  </calcite-tooltip>
+  <calcite-tooltip reference-element="secNum4" placement="right" close-on-click>
+    <span class="tip-text"><strong>Save</strong> downloads the map as a PNG image or a PowerPoint
+      slide (PPTX); <strong>Copy</strong> puts the image on the clipboard to paste straight into
+      a slide. <em>Caption</em> adds the styled text strip with the location details.</span>
+  </calcite-tooltip>
+
+  <!-- ── Paste GeoJSON (advanced) ── -->
+  <calcite-dialog id="geojsonModal" modal heading="Paste GeoJSON" width-scale="s">
+    <div class="gj-content">
+      <p class="gj-hint">Paste a GeoJSON <code>FeatureCollection</code>, <code>Feature</code>, or bare
+        geometry (WGS84 lon/lat). Each feature becomes a numbered location; a
+        <code>name</code>-like property is used as its label.</p>
+      <textarea id="geojsonText" spellcheck="false"
+        placeholder='{"type":"FeatureCollection","features":[…]}'></textarea>
+      <div id="geojsonStatus" class="gj-status"></div>
+    </div>
+    <calcite-button id="geojsonAdd" slot="footer-end" appearance="solid" kind="brand" scale="s" disabled>
+      Add to map
+    </calcite-button>
+  </calcite-dialog>
+
   <!-- ── Info / help dialog ── -->
   <calcite-dialog id="infoModal" modal heading="Project Locator" width-scale="s">
     <div class="info-content">
@@ -295,26 +426,26 @@
           <span class="ui-sample ui-chip"><calcite-icon icon="search" scale="s"></calcite-icon> Address, APN, EIP project…</span>
           — an address, APN, <strong>EIP project name or number</strong>, or coordinates
           ("39.0968, -119.9435") — and pick a result. Repeat to add up to 9 locations
-          (numbered pins). Remove one with its chip, or clear the search to start over.</li>
-        <li><strong>Set the detail view</strong> — the basemap
-          <span class="ui-sample ui-chip">Terrain + Labels ▾</span> and zoom
-          <span class="ui-sample ui-chip">Fit parcel ▾</span> selectors control the Split
-          layout's close-up panel. The draw tools
+          (numbered pins). Remove one with its chip, or clear the search to start over.
+          Advanced: the <span class="ui-sample ui-btn square"><calcite-icon icon="code" scale="s"></calcite-icon></span>
+          button pastes GeoJSON directly.</li>
+        <li><strong>Set the detail view</strong> — the basemap thumbnails and zoom buttons
+          <span class="ui-sample ui-seg"><span class="on">Fit</span><span>1:5k</span><span>1:24k</span></span>
+          control the <em>Detail + Basin</em> layout's close-up panel. The draw tools
           <span class="ui-sample ui-btn square"><calcite-icon icon="pencil" scale="s"></calcite-icon></span>
           (top-right of the map) add annotations that appear in that panel too;
           <span class="ui-sample ui-btn square"><calcite-icon icon="home" scale="s"></calcite-icon></span>
           returns to the Tahoe Basin.</li>
-        <li><strong>Pick brand and layout</strong> —
-          <span class="ui-sample ui-seg"><span class="on">EIP</span><span>TRPA</span></span> and
-          <span class="ui-sample ui-seg"><span class="on">Slide</span><span>Split</span><span>Locator</span></span>:
-          <em>Slide</em> (16:9 title slide), <em>Split</em> (16:9, close-up beside the basin
-          locator), or <em>Locator</em> (8.5×11 portrait basin map). Toggle
-          <em>Caption</em> for the branded text strip.</li>
-        <li><strong>Export</strong> — choose <span class="ui-sample ui-chip">PNG ▾</span> or
-          PowerPoint (.pptx), then
-          <span class="ui-sample ui-btn solid"><calcite-icon icon="download" scale="s"></calcite-icon> Export</span>,
-          or <span class="ui-sample ui-btn outline"><calcite-icon icon="copy-to-clipboard" scale="s"></calcite-icon></span>
-          copies the image straight to the clipboard to paste onto a slide.</li>
+        <li><strong>Pick style and layout</strong> —
+          <span class="ui-sample ui-seg"><span class="on">EIP</span><span>TRPA</span></span> and a layout:
+          <em>Title Slide</em> (text + basin map, 16:9), <em>Detail + Basin</em> (close-up
+          beside the basin locator, 16:9), or <em>Basin Only</em> (full basin, portrait
+          8.5×11). Toggle <em>Caption</em> for the styled text strip.</li>
+        <li><strong>Export</strong> — pick
+          <span class="ui-sample ui-seg"><span class="on">PNG</span><span>PPTX</span></span> and
+          <span class="ui-sample ui-btn solid"><calcite-icon icon="save" scale="s"></calcite-icon> Save</span>,
+          or <span class="ui-sample ui-btn outline"><calcite-icon icon="copy-to-clipboard" scale="s"></calcite-icon> Copy</span>
+          puts the image on the clipboard to paste onto a slide.</li>
       </ol>
       <p class="info-fine">Parcel data: TRPA GIS · Home button returns to the Tahoe Basin.</p>
     </div>
@@ -433,10 +564,12 @@
       "esri/layers/GraphicsLayer", "esri/Graphic", "esri/widgets/ScaleBar",
       "esri/widgets/Home", "esri/widgets/Sketch", "esri/widgets/Expand",
       "esri/core/reactiveUtils", "esri/Basemap", "esri/geometry/Extent",
-      "esri/geometry/Point", "esri/geometry/support/webMercatorUtils",
-    ], (Map, MapView, FeatureLayer, GraphicsLayer, Graphic, ScaleBar, Home, Sketch, Expand, reactiveUtils, Basemap, Extent, Point, wmUtils) => {
+      "esri/geometry/Point", "esri/geometry/Multipoint", "esri/geometry/Polyline",
+      "esri/geometry/Polygon", "esri/geometry/support/webMercatorUtils",
+    ], (Map, MapView, FeatureLayer, GraphicsLayer, Graphic, ScaleBar, Home, Sketch, Expand, reactiveUtils, Basemap, Extent, Point, Multipoint, Polyline, Polygon, wmUtils) => {
       window._Graphic = Graphic; window._reactiveUtils = reactiveUtils; window._Basemap = Basemap;
       window._Extent = Extent; window._Point = Point; window._wm = wmUtils;
+      window._Multipoint = Multipoint; window._Polyline = Polyline; window._Polygon = Polygon;
 
       // The interactive map carries a real basemap (used by the split detail
       // panel). The styled locator layers live only on the offscreen basin view.
@@ -447,7 +580,7 @@
       mapPinLayer = new GraphicsLayer({ listMode: "hide" });   // the pin (hidden during export so a crisp vector pin is drawn on the canvas)
       const sketchLayer = new GraphicsLayer({ title: "Annotations" });
 
-      map = new Map({ basemap: makeBasemap("terrain"), layers: [parcelsFL, sketchLayer, pinLayer, mapPinLayer] });
+      map = new Map({ basemap: makeBasemap("imagery"), layers: [parcelsFL, sketchLayer, pinLayer, mapPinLayer] });
       view = new MapView({ container: "viewDiv", map, center: BASIN.center, zoom: BASIN.zoom,
         constraints: { minZoom: 7, maxZoom: 20, snapToZoom: false }, ui: { components: ["zoom"] },
         popup: { autoOpenEnabled: false } });
@@ -517,8 +650,12 @@
     function searchProjects(term) {
       if (!projectsCache) return [];
       const t = term.toUpperCase();
+      // Dot-insensitive number match (mirrors the dash-insensitive APN search):
+      // "01010100" or "1.1.1.0001"-style partials still hit "01.01.01.0001".
+      const digits = term.replace(/\D/g, "");
       return projectsCache.filter(p =>
-        p.name.toUpperCase().includes(t) || p.num.startsWith(term) || p.num.includes(t)
+        p.name.toUpperCase().includes(t) || p.num.includes(t) ||
+        (digits.length >= 4 && p.num.replace(/\D/g, "").includes(digits))
       ).slice(0, 6);
     }
     // "39.0968, -119.9435" (lat, lon — comma or space separated; order auto-corrected)
@@ -722,7 +859,11 @@
       const G = window._Graphic; pinLayer.removeAll(); mapPinLayer.removeAll();
       locations.forEach((loc, i) => {
         const num = locations.length > 1 ? i + 1 : undefined;
-        if (loc.geometry.extent) pinLayer.add(new G({ geometry: loc.geometry, symbol: parcelFillSymbol(brand().accent) }));
+        if (loc.geometry.type === "polygon")
+          pinLayer.add(new G({ geometry: loc.geometry, symbol: parcelFillSymbol(brand().accent) }));
+        else if (loc.geometry.type === "polyline")
+          pinLayer.add(new G({ geometry: loc.geometry,
+            symbol: { type: "simple-line", color: brand().accent, width: 2.5 } }));
         mapPinLayer.add(new G({ geometry: loc.point, symbol: pinSymbol(brand().pin, num) }));
       });
     }
@@ -752,6 +893,98 @@
     $("locChips").addEventListener("calciteChipClose", (e) => {
       const i = +e.target.dataset.i;
       if (!Number.isNaN(i)) removeLocation(i);
+    });
+
+    // ── Paste GeoJSON (advanced) ──
+    let gjCounter = 0;
+    const GJ_SR = { wkid: 4326 };
+    // GeoJSON geometry (WGS84 lon/lat) → ArcGIS geometry in web mercator.
+    function gjToGeometry(g) {
+      if (!g || !g.type || !g.coordinates) return null;
+      const wm = (geom) => window._wm.geographicToWebMercator(geom);
+      const c = g.coordinates;
+      switch (g.type) {
+        case "Point":
+          return wm(new window._Point({ longitude: c[0], latitude: c[1] }));
+        case "MultiPoint":
+          return wm(new window._Multipoint({ points: c, spatialReference: GJ_SR }));
+        case "LineString":
+          return wm(new window._Polyline({ paths: [c], spatialReference: GJ_SR }));
+        case "MultiLineString":
+          return wm(new window._Polyline({ paths: c, spatialReference: GJ_SR }));
+        case "Polygon":
+          return wm(new window._Polygon({ rings: c, spatialReference: GJ_SR }));
+        case "MultiPolygon":
+          return wm(new window._Polygon({ rings: c.flat(), spatialReference: GJ_SR }));
+        default:
+          return null;   // GeometryCollection etc. unsupported
+      }
+    }
+    const GJ_NAME_PROPS = ["name", "Name", "NAME", "title", "Title", "label", "Label", "ProjectName"];
+    function gjLabel(props, i) {
+      for (const k of GJ_NAME_PROPS) if (props && props[k]) return String(props[k]);
+      return `GeoJSON feature ${i + 1}`;
+    }
+    // Accepts FeatureCollection | Feature | bare geometry. Returns { locs, skipped }.
+    function parseGeoJSONText(text) {
+      const obj = JSON.parse(text);
+      let features;
+      if (obj.type === "FeatureCollection") features = obj.features || [];
+      else if (obj.type === "Feature") features = [obj];
+      else if (obj.type && obj.coordinates) features = [{ type: "Feature", geometry: obj, properties: {} }];
+      else throw new Error("Not a FeatureCollection, Feature, or geometry.");
+      if (!features.length) throw new Error("No features found.");
+      const locs = []; let skipped = 0;
+      features.forEach((f, i) => {
+        const geom = gjToGeometry(f.geometry);
+        if (!geom) { skipped++; return; }
+        const label = gjLabel(f.properties, i);
+        locs.push({ key: `geojson-${++gjCounter}`, label,
+          sub: `${f.geometry.type} · pasted GeoJSON`, short: label,
+          geometry: geom, point: geom.extent ? geom.extent.center : geom, fitZoom: 16 });
+      });
+      if (!locs.length) throw new Error("No supported geometries (GeometryCollection is not supported).");
+      return { locs, skipped };
+    }
+
+    const gjText = $("geojsonText"), gjStatus = $("geojsonStatus"), gjAdd = $("geojsonAdd");
+    let gjPending = null;
+    function gjValidate() {
+      const t = gjText.value.trim();
+      gjPending = null; gjAdd.disabled = true;
+      gjStatus.className = "gj-status";
+      if (!t) { gjStatus.textContent = ""; return; }
+      try {
+        const { locs, skipped } = parseGeoJSONText(t);
+        const room = MAX_LOCATIONS - locations.length;
+        const types = {};
+        locs.forEach(l => { const ty = l.sub.split(" ·")[0]; types[ty] = (types[ty] || 0) + 1; });
+        const typeStr = Object.entries(types).map(([k, n]) => `${n} ${k}`).join(", ");
+        if (room <= 0) {
+          gjStatus.className = "gj-status err";
+          gjStatus.textContent = `Found ${locs.length} feature(s), but the map already has ${MAX_LOCATIONS} locations — remove some first.`;
+          return;
+        }
+        gjPending = locs.slice(0, room);
+        gjAdd.disabled = false;
+        gjStatus.className = "gj-status ok";
+        gjStatus.textContent = `✓ ${locs.length} feature(s): ${typeStr}`
+          + (skipped ? ` · ${skipped} unsupported skipped` : "")
+          + (locs.length > room ? ` · only the first ${room} will be added (max ${MAX_LOCATIONS})` : "");
+      } catch (e) {
+        gjStatus.className = "gj-status err";
+        gjStatus.textContent = e.message || "Invalid JSON.";
+      }
+    }
+    gjText.addEventListener("input", gjValidate);
+    $("geojsonBtn").addEventListener("click", () => { gjValidate(); $("geojsonModal").open = true; });
+    gjAdd.addEventListener("click", () => {
+      if (!gjPending) return;
+      locations.push(...gjPending);
+      refreshLocations(); zoomToLocations();
+      toast(`Added ${gjPending.length} GeoJSON feature(s).`);
+      gjText.value = ""; gjValidate();
+      $("geojsonModal").open = false;
     });
 
     input.addEventListener("input", () => {
@@ -785,15 +1018,26 @@
     });
     $("layoutSeg").addEventListener("click", (e) => {
       const btn = e.target.closest("button"); if (!btn) return; exportLayout = btn.dataset.layout;
-      $("layoutSeg").querySelectorAll("button").forEach(x => x.classList.toggle("active", x === btn));
+      $("layoutSeg").querySelectorAll("button").forEach(x => {
+        x.classList.toggle("active", x === btn);
+        x.setAttribute("aria-checked", x === btn ? "true" : "false");
+      });
     });
-    $("basemapSelect").addEventListener("change", (e) => {
-      map.basemap = makeBasemap(e.target.value);
-    });
+    // Small helper: radiogroup-of-buttons behavior (active class + aria-checked).
+    function wireSeg(id, onPick) {
+      $(id).addEventListener("click", (e) => {
+        const btn = e.target.closest("button"); if (!btn) return;
+        $(id).querySelectorAll("button").forEach(x => {
+          x.classList.toggle("active", x === btn);
+          x.setAttribute("aria-checked", x === btn ? "true" : "false");
+        });
+        onPick(btn.dataset.value);
+      });
+    }
+    wireSeg("basemapSeg", (v) => { map.basemap = makeBasemap(v); });
     // Detail-map zoom: "fit" frames the location(s); a scale value zooms to that
     // fixed scale centered on the locations (or current view center if none).
-    $("scaleSelect").addEventListener("change", (e) => {
-      const v = e.target.value;
+    wireSeg("scaleSeg", (v) => {
       if (v === "fit") {
         if (locations.length) zoomToLocations();
         else view.goTo({ center: BASIN.center, zoom: BASIN.zoom }, { duration: 500 });
@@ -802,6 +1046,8 @@
         view.goTo({ target: ext ? ext.center : view.center, scale: +v }, { duration: 500 });
       }
     });
+    let exportFormat = "png";
+    wireSeg("formatSeg", (v) => { exportFormat = v; });
 
     // ───────────── Export ─────────────
     function loadImage(src) { return new Promise((res, rej) => { const im = new Image();
@@ -1115,7 +1361,7 @@
       if (!view || exporting) return;
       if (!basinReady) { toast("Basin map still loading — try again in a moment."); return; }
       if (exportLayout === "split" && !locations.length) {
-        toast("Add a location first — the Split layout needs a parcel."); return;
+        toast("Add a location first — the Detail + Basin layout needs one."); return;
       }
       exporting = true;
       btn.loading = true;
@@ -1206,7 +1452,7 @@
     }
 
     $("exportBtn").addEventListener("click", () =>
-      $("formatSelect").value === "pptx" ? exportPptx() : exportPng());
+      exportFormat === "pptx" ? exportPptx() : exportPng());
     $("copyBtn").addEventListener("click", () => {
       if (!CLIPBOARD_OK) { toast("Copy not supported here — use Export instead."); return; }
       copyPng();
@@ -1217,6 +1463,13 @@
     $("panelToggle").addEventListener("click", () => {
       const collapsed = document.body.classList.toggle("panel-collapsed");
       $("panelToggleIcon").icon = collapsed ? "chevron-right" : "chevron-left";
+    });
+
+    // ── Step tooltips — resolve reference elements programmatically
+    // (Calcite 5 doesn't reliably resolve the reference-element id attribute) ──
+    document.querySelectorAll("calcite-tooltip[reference-element]").forEach(t => {
+      const el = document.getElementById(t.getAttribute("reference-element"));
+      if (el) t.referenceElement = el;
     });
 
     // ── Info dialog — on demand, plus auto-open on first visit ──
