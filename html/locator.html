@@ -68,6 +68,21 @@
     .sec-title { display: flex; align-items: center; gap: 0.45rem; margin: 0;
       font-size: 0.68rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
       color: #6B7688; }
+    .sec-tool { margin-left: auto; border: none; background: transparent; cursor: pointer;
+      color: #A6AFBD; padding: 0.1rem 0.2rem; border-radius: 5px; line-height: 0; }
+    .sec-tool:hover { color: var(--brand-primary); background: var(--gray-bg); }
+
+    /* Paste-GeoJSON dialog */
+    .gj-content { display: flex; flex-direction: column; gap: 0.6rem; }
+    .gj-hint { margin: 0; font-size: 0.78rem; color: #6B7688; line-height: 1.5; }
+    .gj-hint code { background: var(--gray-bg); padding: 0 0.25rem; border-radius: 4px; font-size: 0.72rem; }
+    #geojsonText { width: 100%; min-height: 180px; resize: vertical; font-family: Consolas, monospace;
+      font-size: 0.72rem; border: 1.5px solid var(--gray-border); border-radius: 8px; padding: 0.5rem;
+      color: var(--brand-dark); }
+    #geojsonText:focus { outline: none; border-color: var(--brand-primary); }
+    .gj-status { font-size: 0.74rem; min-height: 1.1em; color: #6B7688; }
+    .gj-status.ok { color: #2E7D32; }
+    .gj-status.err { color: #B3261E; }
     .sec-num { display: inline-flex; align-items: center; justify-content: center;
       width: 1.15rem; height: 1.15rem; border-radius: 50%;
       background: var(--brand-primary); color: #fff; font-size: 0.66rem; }
@@ -227,7 +242,12 @@
     <aside id="sidePanel" aria-label="Map and export controls">
 
       <section class="panel-sec freeze">
-        <h2 class="sec-title"><span class="sec-num">1</span> Locations</h2>
+        <h2 class="sec-title"><span class="sec-num">1</span> Locations
+          <button id="geojsonBtn" class="sec-tool" title="Paste GeoJSON (advanced)"
+                  aria-label="Paste GeoJSON (advanced)">
+            <calcite-icon icon="code" scale="s"></calcite-icon>
+          </button>
+        </h2>
         <div class="hdr-search">
           <div class="search-box">
             <calcite-icon icon="search" scale="s"></calcite-icon>
@@ -248,8 +268,8 @@
         <h2 class="sec-title"><span class="sec-num">2</span> Map view</h2>
         <label class="field">Basemap <span class="field-hint">(detail map)</span>
           <select class="bm-select" id="basemapSelect">
+            <option value="imagery" selected>Imagery + Labels</option>
             <option value="terrain">Terrain + Labels</option>
-            <option value="imagery">Imagery + Labels</option>
             <option value="humangeo">Human Geography</option>
             <option value="plain">Plain</option>
           </select>
@@ -349,6 +369,21 @@
 
   <div id="basinDiv"></div>
 
+  <!-- ── Paste GeoJSON (advanced) ── -->
+  <calcite-dialog id="geojsonModal" modal heading="Paste GeoJSON" width-scale="s">
+    <div class="gj-content">
+      <p class="gj-hint">Paste a GeoJSON <code>FeatureCollection</code>, <code>Feature</code>, or bare
+        geometry (WGS84 lon/lat). Each feature becomes a numbered location; a
+        <code>name</code>-like property is used as its label.</p>
+      <textarea id="geojsonText" spellcheck="false"
+        placeholder='{"type":"FeatureCollection","features":[…]}'></textarea>
+      <div id="geojsonStatus" class="gj-status"></div>
+    </div>
+    <calcite-button id="geojsonAdd" slot="footer-end" appearance="solid" kind="brand" scale="s" disabled>
+      Add to map
+    </calcite-button>
+  </calcite-dialog>
+
   <!-- ── Info / help dialog ── -->
   <calcite-dialog id="infoModal" modal heading="Project Locator" width-scale="s">
     <div class="info-content">
@@ -359,7 +394,9 @@
           <span class="ui-sample ui-chip"><calcite-icon icon="search" scale="s"></calcite-icon> Address, APN, EIP project…</span>
           — an address, APN, <strong>EIP project name or number</strong>, or coordinates
           ("39.0968, -119.9435") — and pick a result. Repeat to add up to 9 locations
-          (numbered pins). Remove one with its chip, or clear the search to start over.</li>
+          (numbered pins). Remove one with its chip, or clear the search to start over.
+          Advanced: the <span class="ui-sample ui-btn square"><calcite-icon icon="code" scale="s"></calcite-icon></span>
+          button pastes GeoJSON directly.</li>
         <li><strong>Set the detail view</strong> — the basemap
           <span class="ui-sample ui-chip">Terrain + Labels ▾</span> and zoom
           <span class="ui-sample ui-chip">Fit parcel ▾</span> selectors control the
@@ -497,10 +534,12 @@
       "esri/layers/GraphicsLayer", "esri/Graphic", "esri/widgets/ScaleBar",
       "esri/widgets/Home", "esri/widgets/Sketch", "esri/widgets/Expand",
       "esri/core/reactiveUtils", "esri/Basemap", "esri/geometry/Extent",
-      "esri/geometry/Point", "esri/geometry/support/webMercatorUtils",
-    ], (Map, MapView, FeatureLayer, GraphicsLayer, Graphic, ScaleBar, Home, Sketch, Expand, reactiveUtils, Basemap, Extent, Point, wmUtils) => {
+      "esri/geometry/Point", "esri/geometry/Multipoint", "esri/geometry/Polyline",
+      "esri/geometry/Polygon", "esri/geometry/support/webMercatorUtils",
+    ], (Map, MapView, FeatureLayer, GraphicsLayer, Graphic, ScaleBar, Home, Sketch, Expand, reactiveUtils, Basemap, Extent, Point, Multipoint, Polyline, Polygon, wmUtils) => {
       window._Graphic = Graphic; window._reactiveUtils = reactiveUtils; window._Basemap = Basemap;
       window._Extent = Extent; window._Point = Point; window._wm = wmUtils;
+      window._Multipoint = Multipoint; window._Polyline = Polyline; window._Polygon = Polygon;
 
       // The interactive map carries a real basemap (used by the split detail
       // panel). The styled locator layers live only on the offscreen basin view.
@@ -511,7 +550,7 @@
       mapPinLayer = new GraphicsLayer({ listMode: "hide" });   // the pin (hidden during export so a crisp vector pin is drawn on the canvas)
       const sketchLayer = new GraphicsLayer({ title: "Annotations" });
 
-      map = new Map({ basemap: makeBasemap("terrain"), layers: [parcelsFL, sketchLayer, pinLayer, mapPinLayer] });
+      map = new Map({ basemap: makeBasemap("imagery"), layers: [parcelsFL, sketchLayer, pinLayer, mapPinLayer] });
       view = new MapView({ container: "viewDiv", map, center: BASIN.center, zoom: BASIN.zoom,
         constraints: { minZoom: 7, maxZoom: 20, snapToZoom: false }, ui: { components: ["zoom"] },
         popup: { autoOpenEnabled: false } });
@@ -790,7 +829,11 @@
       const G = window._Graphic; pinLayer.removeAll(); mapPinLayer.removeAll();
       locations.forEach((loc, i) => {
         const num = locations.length > 1 ? i + 1 : undefined;
-        if (loc.geometry.extent) pinLayer.add(new G({ geometry: loc.geometry, symbol: parcelFillSymbol(brand().accent) }));
+        if (loc.geometry.type === "polygon")
+          pinLayer.add(new G({ geometry: loc.geometry, symbol: parcelFillSymbol(brand().accent) }));
+        else if (loc.geometry.type === "polyline")
+          pinLayer.add(new G({ geometry: loc.geometry,
+            symbol: { type: "simple-line", color: brand().accent, width: 2.5 } }));
         mapPinLayer.add(new G({ geometry: loc.point, symbol: pinSymbol(brand().pin, num) }));
       });
     }
@@ -820,6 +863,98 @@
     $("locChips").addEventListener("calciteChipClose", (e) => {
       const i = +e.target.dataset.i;
       if (!Number.isNaN(i)) removeLocation(i);
+    });
+
+    // ── Paste GeoJSON (advanced) ──
+    let gjCounter = 0;
+    const GJ_SR = { wkid: 4326 };
+    // GeoJSON geometry (WGS84 lon/lat) → ArcGIS geometry in web mercator.
+    function gjToGeometry(g) {
+      if (!g || !g.type || !g.coordinates) return null;
+      const wm = (geom) => window._wm.geographicToWebMercator(geom);
+      const c = g.coordinates;
+      switch (g.type) {
+        case "Point":
+          return wm(new window._Point({ longitude: c[0], latitude: c[1] }));
+        case "MultiPoint":
+          return wm(new window._Multipoint({ points: c, spatialReference: GJ_SR }));
+        case "LineString":
+          return wm(new window._Polyline({ paths: [c], spatialReference: GJ_SR }));
+        case "MultiLineString":
+          return wm(new window._Polyline({ paths: c, spatialReference: GJ_SR }));
+        case "Polygon":
+          return wm(new window._Polygon({ rings: c, spatialReference: GJ_SR }));
+        case "MultiPolygon":
+          return wm(new window._Polygon({ rings: c.flat(), spatialReference: GJ_SR }));
+        default:
+          return null;   // GeometryCollection etc. unsupported
+      }
+    }
+    const GJ_NAME_PROPS = ["name", "Name", "NAME", "title", "Title", "label", "Label", "ProjectName"];
+    function gjLabel(props, i) {
+      for (const k of GJ_NAME_PROPS) if (props && props[k]) return String(props[k]);
+      return `GeoJSON feature ${i + 1}`;
+    }
+    // Accepts FeatureCollection | Feature | bare geometry. Returns { locs, skipped }.
+    function parseGeoJSONText(text) {
+      const obj = JSON.parse(text);
+      let features;
+      if (obj.type === "FeatureCollection") features = obj.features || [];
+      else if (obj.type === "Feature") features = [obj];
+      else if (obj.type && obj.coordinates) features = [{ type: "Feature", geometry: obj, properties: {} }];
+      else throw new Error("Not a FeatureCollection, Feature, or geometry.");
+      if (!features.length) throw new Error("No features found.");
+      const locs = []; let skipped = 0;
+      features.forEach((f, i) => {
+        const geom = gjToGeometry(f.geometry);
+        if (!geom) { skipped++; return; }
+        const label = gjLabel(f.properties, i);
+        locs.push({ key: `geojson-${++gjCounter}`, label,
+          sub: `${f.geometry.type} · pasted GeoJSON`, short: label,
+          geometry: geom, point: geom.extent ? geom.extent.center : geom, fitZoom: 16 });
+      });
+      if (!locs.length) throw new Error("No supported geometries (GeometryCollection is not supported).");
+      return { locs, skipped };
+    }
+
+    const gjText = $("geojsonText"), gjStatus = $("geojsonStatus"), gjAdd = $("geojsonAdd");
+    let gjPending = null;
+    function gjValidate() {
+      const t = gjText.value.trim();
+      gjPending = null; gjAdd.disabled = true;
+      gjStatus.className = "gj-status";
+      if (!t) { gjStatus.textContent = ""; return; }
+      try {
+        const { locs, skipped } = parseGeoJSONText(t);
+        const room = MAX_LOCATIONS - locations.length;
+        const types = {};
+        locs.forEach(l => { const ty = l.sub.split(" ·")[0]; types[ty] = (types[ty] || 0) + 1; });
+        const typeStr = Object.entries(types).map(([k, n]) => `${n} ${k}`).join(", ");
+        if (room <= 0) {
+          gjStatus.className = "gj-status err";
+          gjStatus.textContent = `Found ${locs.length} feature(s), but the map already has ${MAX_LOCATIONS} locations — remove some first.`;
+          return;
+        }
+        gjPending = locs.slice(0, room);
+        gjAdd.disabled = false;
+        gjStatus.className = "gj-status ok";
+        gjStatus.textContent = `✓ ${locs.length} feature(s): ${typeStr}`
+          + (skipped ? ` · ${skipped} unsupported skipped` : "")
+          + (locs.length > room ? ` · only the first ${room} will be added (max ${MAX_LOCATIONS})` : "");
+      } catch (e) {
+        gjStatus.className = "gj-status err";
+        gjStatus.textContent = e.message || "Invalid JSON.";
+      }
+    }
+    gjText.addEventListener("input", gjValidate);
+    $("geojsonBtn").addEventListener("click", () => { gjValidate(); $("geojsonModal").open = true; });
+    gjAdd.addEventListener("click", () => {
+      if (!gjPending) return;
+      locations.push(...gjPending);
+      refreshLocations(); zoomToLocations();
+      toast(`Added ${gjPending.length} GeoJSON feature(s).`);
+      gjText.value = ""; gjValidate();
+      $("geojsonModal").open = false;
     });
 
     input.addEventListener("input", () => {
