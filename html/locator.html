@@ -36,12 +36,12 @@
     }
     body { display: flex; flex-direction: column; height: 100vh; }
 
-    /* ── Header ── */
+    /* ── Header: branding only ── */
     #appHeader {
-      flex: 0 0 auto; display: flex; align-items: center; gap: 1rem;
-      padding: 0.5rem 1rem; background: var(--white);
+      flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+      gap: 1rem; padding: 0.5rem 1rem; background: var(--white);
       border-bottom: 1px solid var(--gray-border);
-      box-shadow: 0 1px 4px rgba(11,31,65,0.06); z-index: 20; flex-wrap: wrap;
+      box-shadow: 0 1px 4px rgba(11,31,65,0.06); z-index: 20;
     }
     .hdr-brand { display: flex; align-items: center; gap: 0.7rem; flex-shrink: 0; }
     .hdr-brand img { height: 34px; width: auto; object-fit: contain; }
@@ -50,7 +50,36 @@
       text-transform: uppercase; color: var(--brand-primary); }
     .hdr-brand .hname { font-size: 0.95rem; font-weight: 700; color: var(--brand-dark); }
 
-    .hdr-search { flex: 1 1 240px; position: relative; min-width: 200px; max-width: 460px; }
+    /* ── Body: side panel + map ── */
+    #appBody { flex: 1 1 auto; display: flex; min-height: 0; }
+    #sidePanel {
+      flex: 0 0 292px; overflow-y: auto; background: var(--white);
+      border-right: 1px solid var(--gray-border); padding: 0.9rem 1rem 1.2rem;
+      display: flex; flex-direction: column; gap: 1.1rem;
+    }
+    body.panel-collapsed #sidePanel { display: none; }
+    #panelToggle {
+      flex: 0 0 18px; border: none; border-right: 1px solid var(--gray-border);
+      background: var(--white); cursor: pointer; color: #8A93A3; padding: 0;
+    }
+    #panelToggle:hover { background: var(--gray-bg); color: var(--brand-primary); }
+
+    .panel-sec { display: flex; flex-direction: column; gap: 0.55rem; }
+    .sec-title { display: flex; align-items: center; gap: 0.45rem; margin: 0;
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+      color: #6B7688; }
+    .sec-num { display: inline-flex; align-items: center; justify-content: center;
+      width: 1.15rem; height: 1.15rem; border-radius: 50%;
+      background: var(--brand-primary); color: #fff; font-size: 0.66rem; }
+    .field { display: flex; flex-direction: column; gap: 0.25rem;
+      font-size: 0.68rem; font-weight: 600; color: #8A93A3; }
+    .field-hint { font-weight: 400; text-transform: none; letter-spacing: 0; }
+    .field > select, .field > .seg { width: 100%; }
+    .seg-fill button { flex: 1; }
+    .export-row { display: flex; gap: 0.45rem; align-items: stretch; margin-top: 0.2rem; }
+    .export-row calcite-button[width="full"] { flex: 1; }
+
+    .hdr-search { position: relative; }
     .search-box {
       display: flex; align-items: center; gap: 0.5rem; background: var(--gray-bg);
       border: 1.5px solid var(--gray-border); border-radius: 8px; padding: 0.3rem 0.7rem;
@@ -75,35 +104,54 @@
     .suggest-item .s-secondary { font-size: 0.72rem; color: #6B7688; }
     .suggest-item .s-apn { color: var(--brand-primary); font-weight: 700; }
     .suggest-empty { padding: 0.7rem 0.85rem; font-size: 0.8rem; color: #6B7688; }
+    .suggest-group { padding: 0.4rem 0.85rem 0.15rem; font-size: 0.62rem; font-weight: 700;
+      letter-spacing: 0.07em; text-transform: uppercase; color: #8A93A3;
+      background: #fff; border-bottom: 1px solid #eef1f5; }
 
-    .hdr-tools { display: flex; align-items: center; gap: 0.55rem; flex-shrink: 0; flex-wrap: wrap; }
     .seg { display: flex; border-radius: 7px; overflow: hidden; border: 1px solid var(--gray-border); }
     .seg button { border: none; background: #fff; cursor: pointer; font-family: var(--brand-font);
       font-size: 0.76rem; font-weight: 600; color: #6B7688; padding: 0.35rem 0.65rem; transition: all 120ms; }
     .seg button.active { background: var(--brand-primary); color: #fff; }
-    .tool-label { font-size: 0.62rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
-      color: #8A93A3; margin-right: 0.15rem; }
-    .cap-toggle { display: flex; align-items: center; gap: 0.35rem; font-size: 0.76rem; color: var(--brand-dark); }
+    .cap-toggle { display: flex; align-items: center; gap: 0.35rem; font-size: 0.76rem;
+      color: var(--brand-dark); margin-top: 0.2rem; }
     select.bm-select { font-family: var(--brand-font); font-size: 0.76rem; font-weight: 600;
       color: var(--brand-dark); border: 1px solid var(--gray-border); border-radius: 7px;
       padding: 0.35rem 0.5rem; background: #fff; cursor: pointer; }
 
     /* Info modal content */
-    .info-content { font-size: 0.88rem; line-height: 1.55; color: var(--brand-dark); }
+    .info-content { font-size: 0.88rem; line-height: 1.7; color: var(--brand-dark); }
     .info-content p { margin: 0 0 0.7rem; }
-    .info-content ol { margin: 0 0 0.7rem; padding-left: 1.2rem; display: grid; gap: 0.45rem; }
+    .info-content ol { margin: 0 0 0.7rem; padding-left: 1.2rem; display: grid; gap: 0.55rem; }
     .info-content .info-fine { font-size: 0.74rem; color: #6B7688; margin-bottom: 0; }
+    /* Inline, non-interactive replicas of the real controls (always match the live UI) */
+    .ui-sample { display: inline-flex; align-items: center; vertical-align: middle;
+      pointer-events: none; user-select: none; margin: 0 0.15rem; transform: translateY(-1px); }
+    .ui-chip { gap: 0.3rem; background: var(--gray-bg); border: 1.5px solid var(--gray-border);
+      border-radius: 7px; padding: 0.1rem 0.5rem; font-size: 0.74rem; color: #6B7688; white-space: nowrap; }
+    .ui-chip calcite-icon { color: var(--brand-primary); }
+    .ui-seg { border: 1px solid var(--gray-border); border-radius: 6px; overflow: hidden; font-size: 0.7rem; font-weight: 600; }
+    .ui-seg span { padding: 0.12rem 0.45rem; color: #6B7688; background: #fff; white-space: nowrap; }
+    .ui-seg span.on { background: var(--brand-primary); color: #fff; }
+    .ui-btn { gap: 0.3rem; border-radius: 6px; padding: 0.14rem 0.55rem; font-size: 0.72rem;
+      font-weight: 600; white-space: nowrap; }
+    .ui-btn.solid { background: var(--brand-primary); color: #fff; }
+    .ui-btn.outline { border: 1px solid var(--brand-primary); color: var(--brand-primary); background: #fff; }
+    .ui-btn.square { border: 1px solid var(--gray-border); background: #fff; color: var(--brand-dark);
+      padding: 0.14rem 0.3rem; }
 
-    /* Added-locations chip row (wraps onto its own header line when present) */
-    #locChips { flex-basis: 100%; order: 5; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    /* Added-locations chips (stack inside the panel) */
+    #locChips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 
-    /* Responsive: below 760px, search + tools each take a full row and wrap */
+    /* Responsive: below 760px the panel sits above the map */
     @media (max-width: 760px) {
-      #appHeader { gap: 0.6rem; }
       .hdr-brand .hagency { display: none; }
       .hdr-brand img { height: 30px; }
-      .hdr-search { flex-basis: 100%; order: 1; }
-      .hdr-tools { flex-basis: 100%; order: 2; justify-content: flex-start; }
+      #appBody { flex-direction: column; }
+      #sidePanel { flex: 0 0 auto; max-height: 45vh; border-right: none;
+        border-bottom: 1px solid var(--gray-border); }
+      #panelToggle { flex: 0 0 18px; border-right: none;
+        border-bottom: 1px solid var(--gray-border); width: 100%; height: 18px; }
+      #panelToggleIcon { transform: rotate(90deg); }
     }
 
     /* ── Map ── */
@@ -119,9 +167,8 @@
     .loc-card .loc-addr { font-size: 0.92rem; font-weight: 700; margin-top: 2px; }
     .loc-card .loc-meta { font-size: 0.74rem; color: #6B7688; margin-top: 2px; }
 
-    /* Freeze header controls while an export renders (the active button shows a spinner) */
-    body.exporting .hdr-tools > :not(#exportBtn):not(#copyBtn),
-    body.exporting .hdr-search { pointer-events: none; opacity: 0.55; }
+    /* Freeze panel controls while an export renders (the active button shows a spinner) */
+    body.exporting .freeze { pointer-events: none; opacity: 0.55; }
 
     .toast { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 40;
       background: var(--brand-dark); color: #fff; padding: 0.5rem 1rem; border-radius: 8px;
@@ -133,7 +180,7 @@
 </head>
 <body data-brand="eip">
 
-  <!-- ── Header ── -->
+  <!-- ── Header: branding only ── -->
   <header id="appHeader">
     <div class="hdr-brand">
       <img id="brandLogo" src="assets/eip-logo.png" alt="Lake Tahoe EIP" />
@@ -142,72 +189,99 @@
         <span class="hname">Project Locator</span>
       </div>
     </div>
-
-    <div class="hdr-search">
-      <div class="search-box">
-        <calcite-icon icon="search" scale="s"></calcite-icon>
-        <input id="searchInput" type="text" autocomplete="off" spellcheck="false"
-               placeholder="Search an address or APN…"
-               role="combobox" aria-label="Search an address or APN"
-               aria-autocomplete="list" aria-expanded="false" aria-controls="suggestList" />
-        <button class="search-clear" id="searchClear" title="Clear" aria-label="Clear search">
-          <calcite-icon icon="x" scale="s"></calcite-icon>
-        </button>
-      </div>
-      <div class="suggest-list" id="suggestList" role="listbox" aria-label="Parcel suggestions"></div>
-    </div>
-
-    <!-- Added project locations (chips with remove) -->
-    <div id="locChips" aria-label="Added locations" hidden></div>
-
-    <div class="hdr-tools">
-      <div class="seg" id="brandSeg" title="Brand">
-        <button data-brand="eip" class="active">EIP</button>
-        <button data-brand="trpa">TRPA</button>
-      </div>
-      <select class="bm-select" id="basemapSelect" title="Basemap — used by the split detail map">
-        <option value="terrain">Terrain + Labels</option>
-        <option value="imagery">Imagery + Labels</option>
-        <option value="humangeo">Human Geography</option>
-        <option value="plain">Plain</option>
-      </select>
-      <select class="bm-select" id="scaleSelect" title="Detail zoom for the split layout">
-        <option value="fit">Fit parcel</option>
-        <option value="5000">1:5,000</option>
-        <option value="24000">1:24,000</option>
-        <option value="125000">1:125,000</option>
-      </select>
-      <span class="tool-label">Layout</span>
-      <div class="seg" id="layoutSeg" title="Export layout">
-        <button data-layout="slide" class="active">Slide</button>
-        <button data-layout="split">Split</button>
-        <button data-layout="locator">Locator</button>
-      </div>
-      <label class="cap-toggle" title="Include the branded caption strip in the export">
-        <calcite-switch id="capSwitch" checked scale="s"></calcite-switch> Caption
-      </label>
-      <select class="bm-select" id="formatSelect" title="Export format">
-        <option value="png">PNG</option>
-        <option value="pptx">PPTX</option>
-      </select>
-      <calcite-button id="copyBtn" icon-start="copy-to-clipboard" appearance="outline" kind="brand" scale="s" disabled
-        title="Copy image to clipboard" label="Copy image to clipboard"></calcite-button>
-      <calcite-button id="exportBtn" icon-start="download" appearance="solid" kind="brand" scale="s" disabled>Export</calcite-button>
-      <calcite-button id="infoBtn" icon-start="information" appearance="transparent" kind="neutral" scale="s"
-        title="About this tool" label="About this tool"></calcite-button>
-    </div>
+    <calcite-button id="infoBtn" icon-start="information" appearance="transparent" kind="neutral" scale="s"
+      title="About this tool" label="About this tool"></calcite-button>
   </header>
 
-  <!-- ── Map ── -->
-  <div id="mapWrap">
-    <div id="viewDiv"></div>
-    <div class="loc-card" id="locCard">
-      <div class="loc-label">Location</div>
-      <div class="loc-addr" id="locAddr">—</div>
-      <div class="loc-meta" id="locMeta">—</div>
+  <div id="appBody">
+    <!-- ── Left panel: the workflow, grouped like the help steps ── -->
+    <aside id="sidePanel" aria-label="Map and export controls">
+
+      <section class="panel-sec freeze">
+        <h2 class="sec-title"><span class="sec-num">1</span> Locations</h2>
+        <div class="hdr-search">
+          <div class="search-box">
+            <calcite-icon icon="search" scale="s"></calcite-icon>
+            <input id="searchInput" type="text" autocomplete="off" spellcheck="false"
+                   placeholder="Address, APN, EIP project, or lat, lon…"
+                   role="combobox" aria-label="Search an address, APN, EIP project, or coordinates"
+                   aria-autocomplete="list" aria-expanded="false" aria-controls="suggestList" />
+            <button class="search-clear" id="searchClear" title="Clear" aria-label="Clear search">
+              <calcite-icon icon="x" scale="s"></calcite-icon>
+            </button>
+          </div>
+          <div class="suggest-list" id="suggestList" role="listbox" aria-label="Parcel suggestions"></div>
+        </div>
+        <div id="locChips" aria-label="Added locations" hidden></div>
+      </section>
+
+      <section class="panel-sec freeze">
+        <h2 class="sec-title"><span class="sec-num">2</span> Map view</h2>
+        <label class="field">Basemap <span class="field-hint">(Split close-up)</span>
+          <select class="bm-select" id="basemapSelect">
+            <option value="terrain">Terrain + Labels</option>
+            <option value="imagery">Imagery + Labels</option>
+            <option value="humangeo">Human Geography</option>
+            <option value="plain">Plain</option>
+          </select>
+        </label>
+        <label class="field">Detail zoom
+          <select class="bm-select" id="scaleSelect">
+            <option value="fit">Fit parcel</option>
+            <option value="5000">1:5,000</option>
+            <option value="24000">1:24,000</option>
+            <option value="125000">1:125,000</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="panel-sec">
+        <h2 class="sec-title"><span class="sec-num">3</span> Export</h2>
+        <div class="freeze">
+          <label class="field">Brand
+            <div class="seg seg-fill" id="brandSeg">
+              <button data-brand="eip" class="active">EIP</button>
+              <button data-brand="trpa">TRPA</button>
+            </div>
+          </label>
+          <label class="field">Layout
+            <div class="seg seg-fill" id="layoutSeg">
+              <button data-layout="slide" class="active">Slide</button>
+              <button data-layout="split">Split</button>
+              <button data-layout="locator">Locator</button>
+            </div>
+          </label>
+          <label class="cap-toggle" title="Include the branded caption strip in the export">
+            <calcite-switch id="capSwitch" checked scale="s"></calcite-switch> Caption
+          </label>
+        </div>
+        <div class="export-row">
+          <select class="bm-select" id="formatSelect" title="Export format">
+            <option value="png">PNG</option>
+            <option value="pptx">PPTX</option>
+          </select>
+          <calcite-button id="copyBtn" icon-start="copy-to-clipboard" appearance="outline" kind="brand" scale="s" disabled
+            title="Copy image to clipboard" label="Copy image to clipboard"></calcite-button>
+          <calcite-button id="exportBtn" icon-start="download" appearance="solid" kind="brand" scale="s" disabled width="full">Export</calcite-button>
+        </div>
+      </section>
+    </aside>
+
+    <button id="panelToggle" title="Show / hide the panel" aria-label="Show or hide the control panel">
+      <calcite-icon icon="chevron-left" scale="s" id="panelToggleIcon"></calcite-icon>
+    </button>
+
+    <!-- ── Map ── -->
+    <div id="mapWrap">
+      <div id="viewDiv"></div>
+      <div class="loc-card" id="locCard">
+        <div class="loc-label">Location</div>
+        <div class="loc-addr" id="locAddr">—</div>
+        <div class="loc-meta" id="locMeta">—</div>
+      </div>
+      <div class="toast" id="toast"></div>
     </div>
-    <div class="toast" id="toast"></div>
-  </div>
+  </div><!-- /appBody -->
 
   <div id="basinDiv"></div>
 
@@ -217,16 +291,30 @@
       <p>Make consistent, branded <strong>EIP</strong> or <strong>TRPA</strong> locator maps of
         project locations for presentations and reports.</p>
       <ol>
-        <li><strong>Search</strong> an address or APN and pick a result — repeat to add up to
-          9 locations (numbered pins). Remove one with its chip, or clear the search to start over.</li>
-        <li><strong>Set the detail view</strong> — basemap and zoom control the Split layout's
-          close-up panel. The draw tools (pencil, top-right of the map) add annotations that
-          appear in that panel too.</li>
-        <li><strong>Pick brand and layout</strong> — EIP or TRPA; <em>Slide</em> (16:9 title slide),
-          <em>Split</em> (16:9, close-up beside the basin locator), or <em>Locator</em>
-          (8.5×11 portrait basin map). Toggle <em>Caption</em> for the branded text strip.</li>
-        <li><strong>Export</strong> — PNG or PowerPoint (.pptx), or copy the image straight to
-          the clipboard and paste onto a slide.</li>
+        <li><strong>Search</strong>
+          <span class="ui-sample ui-chip"><calcite-icon icon="search" scale="s"></calcite-icon> Address, APN, EIP project…</span>
+          — an address, APN, <strong>EIP project name or number</strong>, or coordinates
+          ("39.0968, -119.9435") — and pick a result. Repeat to add up to 9 locations
+          (numbered pins). Remove one with its chip, or clear the search to start over.</li>
+        <li><strong>Set the detail view</strong> — the basemap
+          <span class="ui-sample ui-chip">Terrain + Labels ▾</span> and zoom
+          <span class="ui-sample ui-chip">Fit parcel ▾</span> selectors control the Split
+          layout's close-up panel. The draw tools
+          <span class="ui-sample ui-btn square"><calcite-icon icon="pencil" scale="s"></calcite-icon></span>
+          (top-right of the map) add annotations that appear in that panel too;
+          <span class="ui-sample ui-btn square"><calcite-icon icon="home" scale="s"></calcite-icon></span>
+          returns to the Tahoe Basin.</li>
+        <li><strong>Pick brand and layout</strong> —
+          <span class="ui-sample ui-seg"><span class="on">EIP</span><span>TRPA</span></span> and
+          <span class="ui-sample ui-seg"><span class="on">Slide</span><span>Split</span><span>Locator</span></span>:
+          <em>Slide</em> (16:9 title slide), <em>Split</em> (16:9, close-up beside the basin
+          locator), or <em>Locator</em> (8.5×11 portrait basin map). Toggle
+          <em>Caption</em> for the branded text strip.</li>
+        <li><strong>Export</strong> — choose <span class="ui-sample ui-chip">PNG ▾</span> or
+          PowerPoint (.pptx), then
+          <span class="ui-sample ui-btn solid"><calcite-icon icon="download" scale="s"></calcite-icon> Export</span>,
+          or <span class="ui-sample ui-btn outline"><calcite-icon icon="copy-to-clipboard" scale="s"></calcite-icon></span>
+          copies the image straight to the clipboard to paste onto a slide.</li>
       </ol>
       <p class="info-fine">Parcel data: TRPA GIS · Home button returns to the Tahoe Basin.</p>
     </div>
@@ -283,12 +371,15 @@
 
     // ───────── Simple flat teardrop pin (no gloss/shine) ─────────
     // With `num` (multi-location mode) the white dot becomes a white number.
+    // Intrinsic size is 4× the display size: ArcGIS rasterizes picture-markers
+    // at the SVG's declared width/height, so a 1× bitmap looks pixelated on
+    // hi-DPI screens — 4× renders sharp and downscales cleanly.
     function makiPinDataUrl(hex, num) {
       const head = num != null
         ? `<text x="13" y="16" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="700" fill="#FFFFFF">${num}</text>`
         : `<circle cx="13" cy="12" r="4.5" fill="#FFFFFF"/>`;
       const svg =
-        `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="38" viewBox="0 0 26 38">` +
+        `<svg xmlns="http://www.w3.org/2000/svg" width="104" height="152" viewBox="0 0 26 38">` +
           `<path d="M13 1 C6 1 1 5.5 1 12 C1 21 13 35 13 35 C13 35 25 21 25 12 C25 5.5 20 1 13 1 Z" ` +
             `fill="${hex}" stroke="#FFFFFF" stroke-width="1.5"/>` +
           head + `</svg>`;
@@ -342,9 +433,10 @@
       "esri/layers/GraphicsLayer", "esri/Graphic", "esri/widgets/ScaleBar",
       "esri/widgets/Home", "esri/widgets/Sketch", "esri/widgets/Expand",
       "esri/core/reactiveUtils", "esri/Basemap", "esri/geometry/Extent",
-    ], (Map, MapView, FeatureLayer, GraphicsLayer, Graphic, ScaleBar, Home, Sketch, Expand, reactiveUtils, Basemap, Extent) => {
+      "esri/geometry/Point", "esri/geometry/support/webMercatorUtils",
+    ], (Map, MapView, FeatureLayer, GraphicsLayer, Graphic, ScaleBar, Home, Sketch, Expand, reactiveUtils, Basemap, Extent, Point, wmUtils) => {
       window._Graphic = Graphic; window._reactiveUtils = reactiveUtils; window._Basemap = Basemap;
-      window._Extent = Extent;
+      window._Extent = Extent; window._Point = Point; window._wm = wmUtils;
 
       // The interactive map carries a real basemap (used by the split detail
       // panel). The styled locator layers live only on the offscreen basin view.
@@ -393,9 +485,9 @@
       });
     }
 
-    // ───────────── Search + suggestions ─────────────
+    // ───────────── Search + suggestions (parcels · EIP projects · coordinates) ─────────────
     const input = $("searchInput"), list = $("suggestList"), clearBtn = $("searchClear");
-    let suggestGraphics = [], debounceT = null, activeSugg = -1, suggestSeq = 0;
+    let suggestItems = [], debounceT = null, activeSugg = -1, suggestSeq = 0;
     const escSql  = (s) => s.replace(/'/g, "''");
     // Escape LIKE wildcards typed by the user; paired with ESCAPE '\' in the clause
     // (verified supported by the TRPA service's standardized SQL).
@@ -403,9 +495,55 @@
     const escHtml = (s) => String(s).replace(/[&<>"']/g,
       (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 
+    // EIP project search source — the projects-map feed (nightly LTinfo snapshot),
+    // lazy-loaded once and searched client-side.
+    const PROJECTS_URL = "../data/projects.geojson";
+    let projectsCache = null, projectsLoad = null;
+    function ensureProjects() {
+      if (!projectsLoad) projectsLoad = (async () => {
+        const resp = await fetch(PROJECTS_URL);
+        if (!resp.ok) throw new Error("projects.geojson " + resp.status);
+        const fc = await resp.json();
+        projectsCache = fc.features
+          .filter(f => f.geometry && f.geometry.type === "Point")
+          .map(f => ({ name: f.properties.ProjectName || "(unnamed project)",
+                       num: f.properties.EIPProjectNumber || "",
+                       stage: f.properties.Stage || "",
+                       lead: f.properties.LeadImplementer || "",
+                       lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] }));
+      })().catch(e => { console.error("EIP project list unavailable:", e); projectsCache = []; });
+      return projectsLoad;
+    }
+    function searchProjects(term) {
+      if (!projectsCache) return [];
+      const t = term.toUpperCase();
+      return projectsCache.filter(p =>
+        p.name.toUpperCase().includes(t) || p.num.startsWith(term) || p.num.includes(t)
+      ).slice(0, 6);
+    }
+    // "39.0968, -119.9435" (lat, lon — comma or space separated; order auto-corrected)
+    function parseCoords(term) {
+      const m = term.match(/^\s*(-?\d{1,3}(?:\.\d+)?)[,\s]+(-?\d{1,3}(?:\.\d+)?)\s*$/);
+      if (!m) return null;
+      let a = +m[1], b = +m[2], lat, lon;
+      if (Math.abs(a) <= 90 && Math.abs(b) > 90) { lat = a; lon = b; }
+      else if (Math.abs(b) <= 90 && Math.abs(a) > 90) { lat = b; lon = a; }
+      else return null;
+      if (lat < 33 || lat > 45 || lon < -125 || lon > -114) return null;  // sanity: not near Tahoe/CA/NV
+      return { lat, lon };
+    }
+
     async function runSuggest(termRaw) {
       const term = termRaw.trim();
       if (term.length < 3 || !parcelsFL) { closeSuggest(); return; }
+      const seq = ++suggestSeq;   // drop stale responses that resolve out of order
+      const items = [];
+
+      // 1) Coordinates — exact match, shown first
+      const coord = parseCoords(term);
+      if (coord) items.push({ kind: "coord", ...coord });
+
+      // 2) Parcels + EIP projects, in parallel
       const t = escLike(term.toUpperCase());
       const clauses = [
         `UPPER(APO_ADDRESS) LIKE '%${t}%' ESCAPE '\\'`,
@@ -413,33 +551,57 @@
       ];
       // Dash-insensitive APN match for pure-digit input (digits only — no escaping needed)
       if (/^\d{4,}$/.test(term)) clauses.push(`APN LIKE '${term.split("").join("%")}%'`);
-      const seq = ++suggestSeq;   // drop stale responses that resolve out of order
-      try {
-        const res = await parcelsFL.queryFeatures({ where: clauses.join(" OR "),
+      const [parcelRes] = await Promise.all([
+        parcelsFL.queryFeatures({ where: clauses.join(" OR "),
           outFields: ["APN","APO_ADDRESS","JURISDICTION","COUNTY"], returnGeometry: true,
-          outSpatialReference: view.spatialReference, num: 8, orderByFields: ["APO_ADDRESS ASC"] });
-        if (seq !== suggestSeq) return;
-        suggestGraphics = res.features; renderSuggest(term);
-      } catch (e) {
-        if (seq !== suggestSeq) return;
-        console.error(e);
+          outSpatialReference: view.spatialReference, num: 6, orderByFields: ["APO_ADDRESS ASC"] })
+          .catch(e => { console.error(e); return { features: [], _err: true }; }),
+        ensureProjects(),
+      ]);
+      if (seq !== suggestSeq) return;
+
+      const projects = searchProjects(term);
+      // EIP-number-looking input (e.g. "01.01.01.0003") → projects first
+      const projFirst = /^\d{2}\./.test(term);
+      const parcelItems = parcelRes.features.map(g => ({ kind: "parcel", g }));
+      const projectItems = projects.map(p => ({ kind: "project", p }));
+      items.push(...(projFirst ? [...projectItems, ...parcelItems] : [...parcelItems, ...projectItems]));
+
+      suggestItems = items;
+      if (!items.length && parcelRes._err) {
         list.innerHTML = `<div class="suggest-empty">Search error — check the connection.</div>`;
-        openSuggest();
-      }
-    }
-    function renderSuggest(term) {
-      activeSugg = -1;
-      if (!suggestGraphics.length) {
-        list.innerHTML = `<div class="suggest-empty">No parcels match “${escHtml(term)}”.</div>`;
         openSuggest(); return;
       }
-      list.innerHTML = suggestGraphics.map((g, i) => {
-        const a = g.attributes, addr = escHtml(a.APO_ADDRESS || "(no address on file)");
-        const juris = escHtml([a.JURISDICTION, a.COUNTY].filter(Boolean).join(" · "));
-        return `<div class="suggest-item" role="option" id="sugg-${i}" data-i="${i}" aria-selected="false">
-          <span class="s-primary">${addr}</span>
-          <span class="s-secondary">APN <span class="s-apn">${escHtml(a.APN || "—")}</span>${juris ? " · " + juris : ""}</span></div>`;
-      }).join("");
+      renderSuggest(term);
+    }
+    const GROUP_LABELS = { parcel: "Parcels", project: "EIP Projects", coord: "Coordinates" };
+    function renderSuggest(term) {
+      activeSugg = -1;
+      if (!suggestItems.length) {
+        list.innerHTML = `<div class="suggest-empty">No matches for “${escHtml(term)}” — try an address, APN, EIP project, or “lat, lon”.</div>`;
+        openSuggest(); return;
+      }
+      let html = "", lastKind = null;
+      suggestItems.forEach((it, i) => {
+        if (it.kind !== lastKind) { html += `<div class="suggest-group">${GROUP_LABELS[it.kind]}</div>`; lastKind = it.kind; }
+        let primary, secondary;
+        if (it.kind === "parcel") {
+          const a = it.g.attributes;
+          primary = escHtml(a.APO_ADDRESS || "(no address on file)");
+          const juris = escHtml([a.JURISDICTION, a.COUNTY].filter(Boolean).join(" · "));
+          secondary = `APN <span class="s-apn">${escHtml(a.APN || "—")}</span>${juris ? " · " + juris : ""}`;
+        } else if (it.kind === "project") {
+          primary = escHtml(it.p.name);
+          secondary = `EIP <span class="s-apn">${escHtml(it.p.num)}</span>${it.p.stage ? " · " + escHtml(it.p.stage) : ""}`;
+        } else {
+          primary = `${it.lat.toFixed(5)}, ${it.lon.toFixed(5)}`;
+          secondary = "Drop a pin at these coordinates";
+        }
+        html += `<div class="suggest-item" role="option" id="sugg-${i}" data-i="${i}" aria-selected="false">
+          <span class="s-primary">${primary}</span>
+          <span class="s-secondary">${secondary}</span></div>`;
+      });
+      list.innerHTML = html;
       openSuggest();
     }
     function openSuggest()  { list.classList.add("open");    input.setAttribute("aria-expanded", "true"); }
@@ -448,7 +610,7 @@
     // One delegated click handler instead of per-item listeners
     list.addEventListener("click", (e) => {
       const el = e.target.closest(".suggest-item");
-      if (el) selectResult(suggestGraphics[+el.dataset.i]);
+      if (el) selectResult(suggestItems[+el.dataset.i]);
     });
     function setActiveSugg(i) {
       const items = list.querySelectorAll(".suggest-item");
@@ -464,8 +626,8 @@
       if (e.key === "ArrowDown") { e.preventDefault(); if (open) setActiveSugg(activeSugg + 1); }
       else if (e.key === "ArrowUp") { e.preventDefault(); if (open) setActiveSugg(activeSugg - 1); }
       else if (e.key === "Enter") {
-        if (open && suggestGraphics.length) { e.preventDefault();
-          selectResult(suggestGraphics[activeSugg >= 0 ? activeSugg : 0]); }
+        if (open && suggestItems.length) { e.preventDefault();
+          selectResult(suggestItems[activeSugg >= 0 ? activeSugg : 0]); }
       }
       else if (e.key === "Escape") { closeSuggest(); }
     });
@@ -486,34 +648,60 @@
       if (locations.length === 1) {
         const loc = loc0();
         view.goTo({ target: loc.geometry.extent ? loc.geometry.extent.expand(2.2)
-                                                : { center: loc.point, zoom: 17 } }, { duration: 550 });
+                                                : { center: loc.point, zoom: loc.fitZoom || 17 } }, { duration: 550 });
       } else {
         view.goTo({ target: unionExtent().expand(1.3) }, { duration: 550 });
       }
     }
 
-    function selectResult(g) {
+    // Normalize a suggestion into the generic location shape:
+    //   key (dedupe id), label (primary text), sub (secondary text),
+    //   short (compact id for lists/captions), geometry, point, fitZoom.
+    function buildLoc(item) {
+      if (item.kind === "parcel") {
+        const a = item.g.attributes, geom = item.g.geometry;
+        if (!geom) return null;
+        const apn = a.APN || "—";
+        const loc = { key: apn, label: a.APO_ADDRESS || "(no address on file)",
+          sub: [`APN ${apn}`, countyLabel({ county: a.COUNTY })].filter(Boolean).join("  ·  "),
+          short: `APN ${apn}`, geometry: geom,
+          point: geom.extent ? geom.extent.center : geom, fitZoom: 17 };
+        return loc;
+      }
+      if (item.kind === "project") {
+        const p = item.p;
+        const pt = window._wm.geographicToWebMercator(
+          new window._Point({ longitude: p.lon, latitude: p.lat }));
+        return { key: p.num || p.name, label: p.name,
+          sub: [`EIP ${p.num}`, p.stage].filter(Boolean).join("  ·  "),
+          short: `EIP ${p.num}`, geometry: pt, point: pt, fitZoom: 15 };
+      }
+      // coord
+      const pt = window._wm.geographicToWebMercator(
+        new window._Point({ longitude: item.lon, latitude: item.lat }));
+      const label = `${item.lat.toFixed(5)}, ${item.lon.toFixed(5)}`;
+      return { key: label, label, sub: "Coordinates (WGS84)", short: label,
+        geometry: pt, point: pt, fitZoom: 16 };
+    }
+    function selectResult(item) {
       closeSuggest();
-      const a = g.attributes, geom = g.geometry;
-      if (!geom) { toast("No geometry for this parcel."); return; }
-      const apn = a.APN || "—";
-      const existing = locations.findIndex(l => l.apn === apn);
+      const loc = buildLoc(item);
+      if (!loc) { toast("No geometry for this result."); return; }
+      const existing = locations.findIndex(l => l.key === loc.key);
       if (existing >= 0) {
-        toast("Parcel already added.");
-        const loc = locations[existing];
-        view.goTo({ target: loc.geometry.extent ? loc.geometry.extent.expand(2.2)
-                                                : { center: loc.point, zoom: 17 } }, { duration: 550 });
+        toast("Already added.");
+        const ex = locations[existing];
+        view.goTo({ target: ex.geometry.extent ? ex.geometry.extent.expand(2.2)
+                                               : { center: ex.point, zoom: ex.fitZoom } }, { duration: 550 });
         return;
       }
       if (locations.length >= MAX_LOCATIONS) {
         toast(`Up to ${MAX_LOCATIONS} locations — remove one to add another.`); return;
       }
-      const pt = geom.extent ? geom.extent.center : geom;
-      locations.push({ apn, address: a.APO_ADDRESS || "(no address on file)",
-        jurisdiction: a.JURISDICTION || "", county: a.COUNTY || "", geometry: geom, point: pt });
-      // First add mirrors the old single-parcel behavior (address stays in the box);
+      locations.push(loc);
+      // First add mirrors the old single-parcel behavior (label stays in the box);
       // later adds clear it so the next search starts clean.
-      input.value = locations.length === 1 ? (a.APO_ADDRESS || apn) : "";
+      input.value = locations.length === 1 ? loc.label : "";
       clearBtn.style.display = input.value ? "block" : "none";
       refreshLocations();
       zoomToLocations();
@@ -542,11 +730,11 @@
       const card = $("locCard");
       if (!locations.length) { card.classList.remove("show"); return; }
       if (locations.length === 1) {
-        $("locAddr").textContent = loc0().address;
-        $("locMeta").textContent = [`APN ${loc0().apn}`, countyLabel(loc0())].filter(Boolean).join("  ·  ");
+        $("locAddr").textContent = loc0().label;
+        $("locMeta").textContent = loc0().sub;
       } else {
         $("locAddr").textContent = `${locations.length} Project Locations`;
-        $("locMeta").textContent = locations.map((l, i) => `${i + 1} · ${l.apn}`).join("   ");
+        $("locMeta").textContent = locations.map((l, i) => `${i + 1} · ${l.short}`).join("   ");
       }
       card.classList.add("show");
     }
@@ -557,7 +745,7 @@
       locations.forEach((loc, i) => {
         const chip = document.createElement("calcite-chip");
         chip.scale = "s"; chip.closable = true; chip.dataset.i = i;
-        chip.textContent = `${locations.length > 1 ? (i + 1) + " · " : ""}${loc.address}`;
+        chip.textContent = `${locations.length > 1 ? (i + 1) + " · " : ""}${loc.label}`;
         row.appendChild(chip);
       });
     }
@@ -570,10 +758,10 @@
       clearBtn.style.display = input.value ? "block" : "none";
       clearTimeout(debounceT); debounceT = setTimeout(() => runSuggest(input.value), 220);
     });
-    input.addEventListener("focus", () => { if (suggestGraphics.length && input.value.length >= 3) list.classList.add("open"); });
+    input.addEventListener("focus", () => { if (suggestItems.length && input.value.length >= 3) list.classList.add("open"); });
     clearBtn.addEventListener("click", () => {
       input.value = ""; clearBtn.style.display = "none"; closeSuggest();
-      suggestGraphics = []; locations = [];
+      suggestItems = []; locations = [];
       refreshLocations();
       view.goTo({ center: BASIN.center, zoom: BASIN.zoom }, { duration: 500 });
     });
@@ -645,6 +833,13 @@
       if (v && v.updating && window._reactiveUtils)
         await Promise.race([window._reactiveUtils.whenOnce(() => !v.updating), new Promise(r => setTimeout(r, ms))]);
     }
+    // A view.takeScreenshot() can stall indefinitely if the WebGL context is
+    // starved — cap it so a stuck export fails with a toast instead of freezing
+    // the UI behind the `exporting` guard forever.
+    function withTimeout(promise, ms, what) {
+      return Promise.race([promise, new Promise((_, rej) =>
+        setTimeout(() => rej(new Error(`${what} timed out after ${ms / 1000}s`)), ms))]);
+    }
     // Crisp vector teardrop pin (Path2D), tip anchored at (tipX, tipY), height h.
     // With `num` the white dot becomes the location number (multi-location mode).
     function drawPin(ctx, tipX, tipY, h, hex, num) {
@@ -682,32 +877,41 @@
     }
 
     // Resize the offscreen basin view to the target aspect, refit, and screenshot at 2×.
+    // Waits are event-driven (reactiveUtils) with timeout caps, NOT stacked setTimeout
+    // polls — background tabs throttle timers to ~1/s, which turned polling into a crawl.
     async function shotBasin(wPx, hPx) {
       const d = $("basinDiv"); d.style.width = wPx + "px"; d.style.height = hPx + "px";
-      // Wait until the view actually adopts the new container size (ResizeObserver is async)…
-      for (let i = 0; i < 25 && Math.abs(basinView.width - wPx) > 2; i++)
-        await new Promise(r => setTimeout(r, 100));
-      await basinView.goTo(basinView._basinExtent, { animate: false }).catch(() => {});
+      await withTimeout(window._reactiveUtils.whenOnce(() => Math.abs(basinView.width - wPx) <= 2),
+        3000, "Basin resize").catch(() => {});   // background tabs may never fire ResizeObserver — proceed
+      // goTo on a render-starved view can neither resolve nor reject — cap it and
+      // proceed (the extent is usually already correct from the previous export).
+      await withTimeout(basinView.goTo(basinView._basinExtent, { animate: false }), 5000, "Basin re-fit")
+        .catch(e => console.warn(e.message || e));
       await settle(basinView, 4000);
-      await new Promise(r => setTimeout(r, 200));   // let the final frame paint
       const pins = pinNorms(basinView, basinView.width, basinView.height);
       const k = EXPORT.basinShot2x;
-      const s = await basinView.takeScreenshot({ width: wPx * k, height: hPx * k, format: "png" });
+      const s = await withTimeout(
+        basinView.takeScreenshot({ width: wPx * k, height: hPx * k, format: "png" }),
+        20000, "Basin map render");
       return { img: await loadImage(s.dataUrl), pins };
     }
     async function shotZoom(aspect) {
       if (mapPinLayer) mapPinLayer.visible = false;    // hide raster pins (we overdraw crisp ones) before settling
       await settle(view, 5000);
-      await new Promise(r => setTimeout(r, 300));      // let basemap tiles finish painting
       const vw = view.width, vh = view.height; let aw, ah;
       if (vw / vh > aspect) { ah = vh; aw = ah * aspect; } else { aw = vw; ah = aw / aspect; }
       const ax = (vw - aw) / 2, ay = (vh - ah) / 2;
       const pins = pinNorms(view, aw, ah, ax, ay);
       const outH = EXPORT.zoomOutH, outW = Math.round(outH * aspect);
-      const s = await view.takeScreenshot({ area: { x: ax, y: ay, width: aw, height: ah },
-        width: outW, height: outH, format: "png" });
-      if (mapPinLayer) mapPinLayer.visible = true;
-      return { img: await loadImage(s.dataUrl), pins };
+      try {
+        const s = await withTimeout(
+          view.takeScreenshot({ area: { x: ax, y: ay, width: aw, height: ah },
+            width: outW, height: outH, format: "png" }),
+          20000, "Detail map render");
+        return { img: await loadImage(s.dataUrl), pins };
+      } finally {
+        if (mapPinLayer) mapPinLayer.visible = true;
+      }
     }
     function drawLogo(ctx, img, x, y, h) { if (!img) return 0; const w = img.width*(h/img.height); ctx.drawImage(img, x, y, w, h); return w; }
     function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x+r,y);
@@ -744,9 +948,10 @@
       const MAX_ROWS = 6;
       // rows: [{bold, gray}] — single keeps the classic address + meta lines
       const rows = single
-        ? [{ bold: loc0().address },
-           { gray: `APN ${loc0().apn}${countyLabel(loc0()) ? "  ·  "+countyLabel(loc0()) : ""}` }]
-        : locations.slice(0, MAX_ROWS).map((l, i) => ({ bold: `${i+1}  ${l.address}`, grayAppend: `  ·  APN ${l.apn}` }));
+        ? [{ bold: loc0().label },
+           { gray: loc0().sub }]
+        : locations.slice(0, MAX_ROWS).map((l, i) => ({ bold: `${i+1}  ${l.label}`,
+            grayAppend: l.short !== l.label ? `  ·  ${l.short}` : "" }));
       if (!single && locations.length > MAX_ROWS) rows.push({ gray: `+${locations.length - MAX_ROWS} more` });
       ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
       // measure widest row
@@ -798,14 +1003,14 @@
       ctx.textBaseline = "middle"; ctx.textAlign = "left";
       if (showAddress && locations.length === 1) {   // Split omits this (the LOCATION card already shows it)
         ctx.fillStyle = b.dark; ctx.font = `700 ${Math.round(h*0.26)}px ${baseFont()}`;
-        ctx.fillText(ellipsize(ctx, loc0().address, maxW), tx, y + h*0.42);
+        ctx.fillText(ellipsize(ctx, loc0().label, maxW), tx, y + h*0.42);
         ctx.fillStyle = "#6B7688"; ctx.font = `400 ${Math.round(h*0.17)}px ${baseFont()}`;
-        ctx.fillText(ellipsize(ctx, `APN ${loc0().apn}${countyLabel(loc0()) ? "   ·   "+countyLabel(loc0()) : ""}`, maxW), tx, y + h*0.72);
+        ctx.fillText(ellipsize(ctx, loc0().sub, maxW), tx, y + h*0.72);
       } else if (showAddress && locations.length > 1) {
         ctx.fillStyle = b.dark; ctx.font = `700 ${Math.round(h*0.26)}px ${baseFont()}`;
         ctx.fillText(`${locations.length} Project Locations`, tx, y + h*0.42);
         ctx.fillStyle = "#6B7688"; ctx.font = `400 ${Math.round(h*0.17)}px ${baseFont()}`;
-        ctx.fillText(ellipsize(ctx, "APNs " + locations.map(l => l.apn).join(", "), maxW), tx, y + h*0.72);
+        ctx.fillText(ellipsize(ctx, locations.map(l => l.short).join(", "), maxW), tx, y + h*0.72);
       } else if (!locations.length) {
         ctx.fillStyle = b.dark; ctx.font = `700 ${Math.round(h*0.26)}px ${baseFont()}`;
         ctx.fillText(b.exportName, tx, y + h*0.5);
@@ -828,9 +1033,9 @@
       const colW = mp.x - 150 - 40;   // usable width of the left text column
       if (caption && locations.length === 1) {
         ctx.fillStyle = b.dark; ctx.font = `700 92px ${baseFont()}`;
-        ctx.fillText(ellipsize(ctx, loc0().address, colW), 150, 640);
+        ctx.fillText(ellipsize(ctx, loc0().label, colW), 150, 640);
         ctx.fillStyle = "#6B7688"; ctx.font = `400 46px ${baseFont()}`;
-        ctx.fillText(ellipsize(ctx, `APN ${loc0().apn}${countyLabel(loc0()) ? "   ·   "+countyLabel(loc0()) : ""}`, colW), 150, 710);
+        ctx.fillText(ellipsize(ctx, loc0().sub, colW), 150, 710);
       } else if (caption && locations.length > 1) {
         ctx.fillStyle = b.dark; ctx.font = `700 92px ${baseFont()}`;
         ctx.fillText(`${locations.length} Project Locations`, 150, 560);
@@ -838,7 +1043,7 @@
         let ly = 640;
         locations.slice(0, MAX_LINES).forEach((l, i) => {
           ctx.fillStyle = b.dark; ctx.font = `600 40px ${baseFont()}`;
-          ctx.fillText(ellipsize(ctx, `${i+1}.  ${l.address} — APN ${l.apn}`, colW), 150, ly);
+          ctx.fillText(ellipsize(ctx, `${i+1}.  ${l.label}${l.short !== l.label ? " — " + l.short : ""}`, colW), 150, ly);
           ly += 58;
         });
         if (locations.length > MAX_LINES) {
@@ -897,7 +1102,7 @@
     }
     function exportSlug() {
       return locations.length > 1 ? `${locations.length}-locations`
-        : ((loc0()?.apn || loc0()?.address || "locator").toString()
+        : ((loc0()?.key || "locator").toString()
             .replace(/[^\w]+/g,"-").replace(/^-|-$/g,"").slice(0,40) || "locator");
     }
     function downloadUrl(url, filename) {
@@ -1007,6 +1212,12 @@
       copyPng();
     });
     if (!CLIPBOARD_OK) $("copyBtn").hidden = true;
+
+    // ── Panel collapse ──
+    $("panelToggle").addEventListener("click", () => {
+      const collapsed = document.body.classList.toggle("panel-collapsed");
+      $("panelToggleIcon").icon = collapsed ? "chevron-right" : "chevron-left";
+    });
 
     // ── Info dialog — on demand, plus auto-open on first visit ──
     $("infoBtn").addEventListener("click", () => { $("infoModal").open = true; });
