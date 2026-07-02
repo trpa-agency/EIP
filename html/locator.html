@@ -238,12 +238,13 @@
       </div>
     </div>
     <div class="hdr-links">
-      <calcite-button href="https://trpa-agency.github.io/EIP/html/projects-map.html" target="_blank" rel="noopener"
+      <!-- One related-map link at a time, matched to the active Style -->
+      <calcite-button id="projectsLink" href="https://trpa-agency.github.io/EIP/html/projects-map.html" target="_blank" rel="noopener"
         icon-start="launch" appearance="transparent" kind="neutral" scale="s"
-        title="Open the EIP Projects Map in a new window"><span class="link-label">Projects Map</span></calcite-button>
-      <calcite-button href="https://gis.trpa.org/PermitReview/" target="_blank" rel="noopener"
+        title="Open the EIP Projects Map in a new window"><span class="link-label">EIP Projects Map</span></calcite-button>
+      <calcite-button id="permitLink" href="https://gis.trpa.org/PermitReview/" target="_blank" rel="noopener" hidden
         icon-start="launch" appearance="transparent" kind="neutral" scale="s"
-        title="Open the Permit Review Map in a new window"><span class="link-label">Permit Review</span></calcite-button>
+        title="Open the Permit Review Map in a new window"><span class="link-label">Permit Review Map</span></calcite-button>
       <calcite-button id="infoBtn" icon-start="information" appearance="transparent" kind="neutral" scale="s"
         title="About this tool" label="About this tool"></calcite-button>
     </div>
@@ -254,7 +255,33 @@
     <aside id="sidePanel" aria-label="Map and export controls">
 
       <section class="panel-sec freeze">
-        <h2 class="sec-title"><span class="sec-num" id="secNum1" tabindex="0">1</span> Locations
+        <h2 class="sec-title"><span class="sec-num" id="secNum1" tabindex="0">1</span> Style &amp; layout</h2>
+        <label class="field">Style
+          <div class="seg seg-fill" id="brandSeg">
+            <button data-brand="eip" class="active">EIP</button>
+            <button data-brand="trpa">TRPA</button>
+          </div>
+        </label>
+        <label class="field">Layout
+          <div class="layout-picker" id="layoutSeg" role="radiogroup" aria-label="Export layout">
+            <button data-layout="slide" class="active" role="radio" aria-checked="true">
+              <span class="lp-text"><span class="lp-name">Title Slide</span>
+                <span class="lp-dims">Text + basin map · 16:9</span></span>
+            </button>
+            <button data-layout="split" role="radio" aria-checked="false">
+              <span class="lp-text"><span class="lp-name">Detail + Basin</span>
+                <span class="lp-dims">Close-up beside basin · 16:9</span></span>
+            </button>
+            <button data-layout="locator" role="radio" aria-checked="false">
+              <span class="lp-text"><span class="lp-name">Basin Only</span>
+                <span class="lp-dims">Full basin, portrait · 8.5×11</span></span>
+            </button>
+          </div>
+        </label>
+      </section>
+
+      <section class="panel-sec freeze">
+        <h2 class="sec-title"><span class="sec-num" id="secNum2" tabindex="0">2</span> Locations
           <button id="geojsonBtn" class="sec-tool" title="Paste GeoJSON (advanced)"
                   aria-label="Paste GeoJSON (advanced)">
             <calcite-icon icon="code" scale="s"></calcite-icon>
@@ -277,7 +304,7 @@
       </section>
 
       <section class="panel-sec freeze">
-        <h2 class="sec-title"><span class="sec-num" id="secNum2" tabindex="0">2</span> Map view</h2>
+        <h2 class="sec-title"><span class="sec-num" id="secNum3" tabindex="0">3</span> Map view</h2>
         <label class="field">Basemap <span class="field-hint">(detail map)</span></label>
         <div class="bm-grid" id="basemapSeg" role="radiogroup" aria-label="Basemap">
           <button data-value="imagery" class="bm-btn active" role="radio" aria-checked="true">
@@ -307,32 +334,6 @@
             <button data-value="5000" role="radio" aria-checked="false">1:5k</button>
             <button data-value="24000" role="radio" aria-checked="false">1:24k</button>
             <button data-value="125000" role="radio" aria-checked="false">1:125k</button>
-          </div>
-        </label>
-      </section>
-
-      <section class="panel-sec freeze">
-        <h2 class="sec-title"><span class="sec-num" id="secNum3" tabindex="0">3</span> Style &amp; layout</h2>
-        <label class="field">Style
-          <div class="seg seg-fill" id="brandSeg">
-            <button data-brand="eip" class="active">EIP</button>
-            <button data-brand="trpa">TRPA</button>
-          </div>
-        </label>
-        <label class="field">Layout
-          <div class="layout-picker" id="layoutSeg" role="radiogroup" aria-label="Export layout">
-            <button data-layout="slide" class="active" role="radio" aria-checked="true">
-              <span class="lp-text"><span class="lp-name">Title Slide</span>
-                <span class="lp-dims">Text + basin map · 16:9</span></span>
-            </button>
-            <button data-layout="split" role="radio" aria-checked="false">
-              <span class="lp-text"><span class="lp-name">Detail + Basin</span>
-                <span class="lp-dims">Close-up beside basin · 16:9</span></span>
-            </button>
-            <button data-layout="locator" role="radio" aria-checked="false">
-              <span class="lp-text"><span class="lp-name">Basin Only</span>
-                <span class="lp-dims">Full basin, portrait · 8.5×11</span></span>
-            </button>
           </div>
         </label>
       </section>
@@ -379,21 +380,21 @@
 
   <!-- ── Hover help for each workflow step (anchored to the number badges) ── -->
   <calcite-tooltip reference-element="secNum1" placement="right" close-on-click>
+    <span class="tip-text"><strong>Style</strong> picks the EIP or TRPA look (logo, colors, pin —
+      and the related map link in the header). <strong>Layout</strong>: <em>Title Slide</em> —
+      text block + basin map (16:9); <em>Detail + Basin</em> — close-up beside the basin
+      locator (16:9); <em>Basin Only</em> — full-basin portrait page (8.5×11).</span>
+  </calcite-tooltip>
+  <calcite-tooltip reference-element="secNum2" placement="right" close-on-click>
     <span class="tip-text">Add up to 9 locations, each with a numbered pin. Search an
       <strong>address</strong>, <strong>APN</strong>, <strong>EIP project</strong> (name or
       number), or <strong>coordinates</strong> ("39.0968, -119.9435"). Advanced: the
       ⟨⟩ button pastes GeoJSON. Remove a location with its chip.</span>
   </calcite-tooltip>
-  <calcite-tooltip reference-element="secNum2" placement="right" close-on-click>
+  <calcite-tooltip reference-element="secNum3" placement="right" close-on-click>
     <span class="tip-text">The <strong>basemap</strong> and <strong>detail zoom</strong> set the
       close-up map used by the <em>Detail + Basin</em> layout. Draw tools (pencil on the map)
       add annotations to that view; Home returns to the Tahoe Basin.</span>
-  </calcite-tooltip>
-  <calcite-tooltip reference-element="secNum3" placement="right" close-on-click>
-    <span class="tip-text"><strong>Style</strong> picks the EIP or TRPA look (logo, colors, pin).
-      <strong>Layout</strong>: <em>Title Slide</em> — text block + basin map (16:9);
-      <em>Detail + Basin</em> — close-up beside the basin locator (16:9);
-      <em>Basin Only</em> — full-basin portrait page (8.5×11).</span>
   </calcite-tooltip>
   <calcite-tooltip reference-element="secNum4" placement="right" close-on-click>
     <span class="tip-text"><strong>Save</strong> downloads the map as a PNG image or a PowerPoint
@@ -422,6 +423,12 @@
       <p>Make consistent, branded <strong>EIP</strong> or <strong>TRPA</strong> locator maps of
         project locations for presentations and reports.</p>
       <ol>
+        <li><strong>Pick style and layout</strong> —
+          <span class="ui-sample ui-seg"><span class="on">EIP</span><span>TRPA</span></span>
+          sets the look (and the related map link in the header), then a layout:
+          <em>Title Slide</em> (text + basin map, 16:9), <em>Detail + Basin</em> (close-up
+          beside the basin locator, 16:9), or <em>Basin Only</em> (full basin, portrait
+          8.5×11).</li>
         <li><strong>Search</strong>
           <span class="ui-sample ui-chip"><calcite-icon icon="search" scale="s"></calcite-icon> Address, APN, EIP project…</span>
           — an address, APN, <strong>EIP project name or number</strong>, or coordinates
@@ -436,16 +443,12 @@
           (top-right of the map) add annotations that appear in that panel too;
           <span class="ui-sample ui-btn square"><calcite-icon icon="home" scale="s"></calcite-icon></span>
           returns to the Tahoe Basin.</li>
-        <li><strong>Pick style and layout</strong> —
-          <span class="ui-sample ui-seg"><span class="on">EIP</span><span>TRPA</span></span> and a layout:
-          <em>Title Slide</em> (text + basin map, 16:9), <em>Detail + Basin</em> (close-up
-          beside the basin locator, 16:9), or <em>Basin Only</em> (full basin, portrait
-          8.5×11). Toggle <em>Caption</em> for the styled text strip.</li>
         <li><strong>Export</strong> — pick
           <span class="ui-sample ui-seg"><span class="on">PNG</span><span>PPTX</span></span> and
           <span class="ui-sample ui-btn solid"><calcite-icon icon="save" scale="s"></calcite-icon> Save</span>,
           or <span class="ui-sample ui-btn outline"><calcite-icon icon="copy-to-clipboard" scale="s"></calcite-icon> Copy</span>
-          puts the image on the clipboard to paste onto a slide.</li>
+          puts the image on the clipboard to paste onto a slide. Toggle <em>Caption</em>
+          for the styled text strip.</li>
       </ol>
       <p class="info-fine">Parcel data: TRPA GIS · Home button returns to the Tahoe Basin.</p>
     </div>
@@ -1010,6 +1013,9 @@
       getLogo().then(im => { if (key === brandKey && im && im._durl) $("brandLogo").src = im._durl; });
       $("brandAgency").textContent = b.agency;
       $("brandSeg").querySelectorAll("button").forEach(btn => btn.classList.toggle("active", btn.dataset.brand === brandKey));
+      // Header shows the related map for the active style
+      $("projectsLink").hidden = brandKey !== "eip";
+      $("permitLink").hidden = brandKey !== "trpa";
       if (locations.length) drawResult();
       updateLocCard();
     }
