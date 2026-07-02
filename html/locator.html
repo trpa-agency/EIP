@@ -246,7 +246,7 @@
 
       <section class="panel-sec freeze">
         <h2 class="sec-title"><span class="sec-num">2</span> Map view</h2>
-        <label class="field">Basemap <span class="field-hint">(Split close-up)</span>
+        <label class="field">Basemap <span class="field-hint">(detail map)</span>
           <select class="bm-select" id="basemapSelect">
             <option value="terrain">Terrain + Labels</option>
             <option value="imagery">Imagery + Labels</option>
@@ -362,8 +362,8 @@
           (numbered pins). Remove one with its chip, or clear the search to start over.</li>
         <li><strong>Set the detail view</strong> — the basemap
           <span class="ui-sample ui-chip">Terrain + Labels ▾</span> and zoom
-          <span class="ui-sample ui-chip">Fit parcel ▾</span> selectors control the Split
-          layout's close-up panel. The draw tools
+          <span class="ui-sample ui-chip">Fit parcel ▾</span> selectors control the
+          <em>Detail + Basin</em> layout's close-up panel. The draw tools
           <span class="ui-sample ui-btn square"><calcite-icon icon="pencil" scale="s"></calcite-icon></span>
           (top-right of the map) add annotations that appear in that panel too;
           <span class="ui-sample ui-btn square"><calcite-icon icon="home" scale="s"></calcite-icon></span>
@@ -1186,7 +1186,7 @@
       if (!view || exporting) return;
       if (!basinReady) { toast("Basin map still loading — try again in a moment."); return; }
       if (exportLayout === "split" && !locations.length) {
-        toast("Add a location first — the Split layout needs a parcel."); return;
+        toast("Add a location first — the Detail + Basin layout needs one."); return;
       }
       exporting = true;
       btn.loading = true;
