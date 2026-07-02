@@ -517,8 +517,12 @@
     function searchProjects(term) {
       if (!projectsCache) return [];
       const t = term.toUpperCase();
+      // Dot-insensitive number match (mirrors the dash-insensitive APN search):
+      // "01010100" or "1.1.1.0001"-style partials still hit "01.01.01.0001".
+      const digits = term.replace(/\D/g, "");
       return projectsCache.filter(p =>
-        p.name.toUpperCase().includes(t) || p.num.startsWith(term) || p.num.includes(t)
+        p.name.toUpperCase().includes(t) || p.num.includes(t) ||
+        (digits.length >= 4 && p.num.replace(/\D/g, "").includes(digits))
       ).slice(0, 6);
     }
     // "39.0968, -119.9435" (lat, lon — comma or space separated; order auto-corrected)
