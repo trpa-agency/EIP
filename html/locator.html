@@ -112,6 +112,35 @@
     .seg button { border: none; background: #fff; cursor: pointer; font-family: var(--brand-font);
       font-size: 0.76rem; font-weight: 600; color: #6B7688; padding: 0.35rem 0.65rem; transition: all 120ms; }
     .seg button.active { background: var(--brand-primary); color: #fff; }
+
+    /* Layout picker — vertical options with always-visible wireframe previews */
+    .layout-picker { display: flex; flex-direction: column; gap: 0.4rem; }
+    .layout-picker button {
+      display: flex; align-items: center; gap: 0.6rem; text-align: left; cursor: pointer;
+      font-family: var(--brand-font); background: #fff;
+      border: 1.5px solid var(--gray-border); border-radius: 8px; padding: 0.4rem 0.55rem;
+      transition: border-color 120ms, background 120ms;
+    }
+    .layout-picker button:hover { border-color: var(--brand-primary); }
+    .layout-picker button.active { border-color: var(--brand-primary); background: var(--gray-bg);
+      box-shadow: inset 0 0 0 1px var(--brand-primary); }
+    .layout-picker svg { height: 38px; width: auto; flex-shrink: 0; display: block; }
+    .layout-picker .lp-text { display: flex; flex-direction: column; gap: 1px; line-height: 1.2; }
+    .layout-picker .lp-name { font-size: 0.78rem; font-weight: 700; color: var(--brand-dark); text-transform: none; letter-spacing: 0; }
+    .layout-picker .lp-dims { font-size: 0.64rem; font-weight: 400; color: #8A93A3; text-transform: none; letter-spacing: 0; }
+    /* wireframe palette — driven by the live brand variables */
+    .lp-page   { fill: #fff; stroke: var(--gray-border); stroke-width: 1; }
+    .lp-mask   { fill: #6b7b96; }
+    .lp-basin  { fill: #fff; }
+    .lp-pin    { fill: var(--brand-primary); stroke: #fff; stroke-width: 0.7; }
+    .lp-ink    { fill: var(--brand-dark); }
+    .lp-muted  { fill: #C6CDD8; }
+    .lp-accent { fill: var(--brand-primary); }
+    .lp-accent2{ fill: var(--brand-primary); opacity: 0.35; }
+    .lp-map    { fill: #E7EBDF; }
+    .lp-road   { fill: none; stroke: #fff; stroke-width: 2; }
+    .lp-parcel { fill: rgba(241,96,34,0.18); stroke: var(--brand-accent); stroke-width: 1; }
+    .lp-cap    { fill: #fff; stroke: var(--gray-border); stroke-width: 0.6; }
     .cap-toggle { display: flex; align-items: center; gap: 0.35rem; font-size: 0.76rem;
       color: var(--brand-dark); margin-top: 0.2rem; }
     select.bm-select { font-family: var(--brand-font); font-size: 0.76rem; font-weight: 600;
@@ -245,10 +274,45 @@
             </div>
           </label>
           <label class="field">Layout
-            <div class="seg seg-fill" id="layoutSeg">
-              <button data-layout="slide" class="active">Slide</button>
-              <button data-layout="split">Split</button>
-              <button data-layout="locator">Locator</button>
+            <div class="layout-picker" id="layoutSeg" role="radiogroup" aria-label="Export layout">
+              <button data-layout="slide" class="active" role="radio" aria-checked="true">
+                <svg viewBox="0 0 64 36" aria-hidden="true">
+                  <rect x="0" y="0" width="64" height="36" rx="2" class="lp-page"/>
+                  <rect x="5" y="6" width="10" height="4" rx="1" class="lp-accent2"/>
+                  <rect x="5" y="16" width="22" height="4" rx="1" class="lp-ink"/>
+                  <rect x="5" y="22" width="16" height="2.5" rx="1" class="lp-muted"/>
+                  <rect x="36" y="3" width="25" height="30" class="lp-mask"/>
+                  <path d="M46 8 C50 8 52 12 51 16 C53 19 52 24 49 28 C47 31 45 29 44 26 C42 21 41 15 43 11 C44 8 45 8 46 8 Z" class="lp-basin"/>
+                  <circle cx="48" cy="13" r="2.2" class="lp-pin"/>
+                  <rect x="5" y="30" width="52" height="1.6" class="lp-accent"/>
+                </svg>
+                <span class="lp-text"><span class="lp-name">Title Slide</span>
+                  <span class="lp-dims">Text + basin map · 16:9</span></span>
+              </button>
+              <button data-layout="split" role="radio" aria-checked="false">
+                <svg viewBox="0 0 64 36" aria-hidden="true">
+                  <rect x="0" y="0" width="64" height="36" rx="2" class="lp-page"/>
+                  <rect x="0" y="0" width="42" height="36" class="lp-map"/>
+                  <path d="M8 26 L18 12 L26 20 L34 8" class="lp-road"/>
+                  <path d="M20 18 l6 -3 l3 6 l-7 3 Z" class="lp-parcel"/>
+                  <circle cx="24" cy="20" r="2.4" class="lp-pin"/>
+                  <rect x="43" y="0" width="21" height="36" class="lp-mask"/>
+                  <path d="M52 6 C56 6 58 11 57 16 C59 20 58 26 54 31 C52 34 50 32 49 28 C47 22 46 15 48 10 C49 7 50 6 52 6 Z" class="lp-basin"/>
+                  <circle cx="53" cy="11" r="2" class="lp-pin"/>
+                </svg>
+                <span class="lp-text"><span class="lp-name">Detail + Basin</span>
+                  <span class="lp-dims">Close-up beside basin · 16:9</span></span>
+              </button>
+              <button data-layout="locator" role="radio" aria-checked="false">
+                <svg viewBox="0 0 28 36" aria-hidden="true">
+                  <rect x="0" y="0" width="28" height="36" rx="2" class="lp-mask"/>
+                  <path d="M13 4 C18 4 20 10 19 16 C21 20 20 26 16 30 C14 33 11 31 10 27 C8 21 7 13 9 8 C10 5 11 4 13 4 Z" class="lp-basin"/>
+                  <circle cx="16" cy="9" r="2.2" class="lp-pin"/>
+                  <rect x="0" y="31" width="28" height="5" class="lp-cap"/>
+                </svg>
+                <span class="lp-text"><span class="lp-name">Basin Only</span>
+                  <span class="lp-dims">Full basin, portrait · 8.5×11</span></span>
+              </button>
             </div>
           </label>
           <label class="cap-toggle" title="Include the branded caption strip in the export">
@@ -305,10 +369,10 @@
           <span class="ui-sample ui-btn square"><calcite-icon icon="home" scale="s"></calcite-icon></span>
           returns to the Tahoe Basin.</li>
         <li><strong>Pick brand and layout</strong> —
-          <span class="ui-sample ui-seg"><span class="on">EIP</span><span>TRPA</span></span> and
-          <span class="ui-sample ui-seg"><span class="on">Slide</span><span>Split</span><span>Locator</span></span>:
-          <em>Slide</em> (16:9 title slide), <em>Split</em> (16:9, close-up beside the basin
-          locator), or <em>Locator</em> (8.5×11 portrait basin map). Toggle
+          <span class="ui-sample ui-seg"><span class="on">EIP</span><span>TRPA</span></span> and a layout:
+          <em>Title Slide</em> (text + basin map, 16:9), <em>Detail + Basin</em> (close-up
+          beside the basin locator, 16:9), or <em>Basin Only</em> (full basin, portrait
+          8.5×11) — each option shows a preview of its arrangement. Toggle
           <em>Caption</em> for the branded text strip.</li>
         <li><strong>Export</strong> — choose <span class="ui-sample ui-chip">PNG ▾</span> or
           PowerPoint (.pptx), then
@@ -789,7 +853,10 @@
     });
     $("layoutSeg").addEventListener("click", (e) => {
       const btn = e.target.closest("button"); if (!btn) return; exportLayout = btn.dataset.layout;
-      $("layoutSeg").querySelectorAll("button").forEach(x => x.classList.toggle("active", x === btn));
+      $("layoutSeg").querySelectorAll("button").forEach(x => {
+        x.classList.toggle("active", x === btn);
+        x.setAttribute("aria-checked", x === btn ? "true" : "false");
+      });
     });
     $("basemapSelect").addEventListener("change", (e) => {
       map.basemap = makeBasemap(e.target.value);
