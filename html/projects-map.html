@@ -19,7 +19,9 @@
        AMD/UMD "multipleDefine" collision with ArcGIS's Dojo loader. -->
 
   <!-- Lexend Deca (EIP brand font) -->
-  <link href="https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- Self-hosted fonts (same files the Project Locator uses) — keeps
+       canvas text in the branded map export deterministic and offline-safe -->
+  <link href="assets/fonts/fonts.css" rel="stylesheet" />
 
   <style>
     :root {
@@ -1045,6 +1047,20 @@
           <strong>Export</strong> saves GeoJSON + Shapefile + CSV.
           <strong>Copy</strong> puts GeoJSON on your clipboard (points only).
         </div>
+        <div class="export-row" style="margin-top:0.55rem;">
+          <button id="export-map-png" class="export-pill" type="button"
+            title="Download a branded 16:9 image of the current map view — header, legend, and filter summary included">
+            <span class="export-icon" aria-hidden="true">⬇</span> Map PNG
+          </button>
+          <button id="export-map-pptx" class="copy-pill" type="button"
+            title="Download the same branded map image placed on a widescreen PowerPoint slide">
+            <span class="export-icon" aria-hidden="true">⬇</span> Map PPTX
+          </button>
+        </div>
+        <div class="export-footnote">
+          <strong>Map PNG / PPTX</strong> render the current view as a
+          branded 16:9 graphic with legend — ready for slides.
+        </div>
         <label class="include-footprints" id="include-footprints-row">
           <input type="checkbox" id="include-footprints" />
           Include detailed geometry
@@ -1256,13 +1272,6 @@
     "e17aeb86-85e3-4260-83fd-a2b32501c476";
   const TRPA_BOUNDARY_URL =
     "https://maps.trpa.org/server/rest/services/Boundaries/FeatureServer/4";
-
-  // Print service URL — default Esri public PrintingTools as a placeholder.
-  // Swap in your TRPA custom print service once it's published, e.g.
-  //   https://maps.trpa.org/server/rest/services/<YourPrintService>/GPServer/Export%20Web%20Map%20Task
-  const PRINT_SERVICE_URL =
-    "https://utility.arcgisonline.com/arcgis/rest/services/" +
-    "Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task";
 
   // ─────────────────────────────────────────────────────────────────────
   // App state
@@ -2549,11 +2558,14 @@
       "esri/widgets/Home",
       "esri/widgets/ScaleBar",
       "esri/widgets/Legend",
-      "esri/widgets/Print",
       "esri/widgets/Expand",
       "esri/widgets/Fullscreen",
       "esri/widgets/BasemapToggle",
-    ], (Map, MapView, SceneView, GeoJSONLayer, FeatureLayer, Home, ScaleBar, Legend, Print, Expand, Fullscreen, BasemapToggle) => {
+      "esri/core/reactiveUtils",
+    ], (Map, MapView, SceneView, GeoJSONLayer, FeatureLayer, Home, ScaleBar, Legend, Expand, Fullscreen, BasemapToggle, reactiveUtils) => {
+
+      // Exposed for the branded map export's event-driven settle wait
+      state._reactiveUtils = reactiveUtils;
 
       // TRPA agency boundary — drawn first, beneath everything
       const boundary = new FeatureLayer({
@@ -2746,18 +2758,7 @@
         view.ui.add(legendExpand, "top-right");
         view._eipWidgets.push(legendExpand);
 
-        const printExpand = new Expand({
-          view,
-          content: new Print({ view, printServiceUrl: PRINT_SERVICE_URL }),
-          expanded: false,
-          expandIcon: "print",
-          expandTooltip: "Print / export map",
-          collapseTooltip: "Close print",
-        });
-        view.ui.add(printExpand, "top-right");
-        view._eipWidgets.push(printExpand);
-
-        // Map Options Expand (top-right, alongside Legend & Print). Pulls
+        // Map Options Expand (top-right, alongside Legend). Pulls
         // the hidden #layer-controls node into its panel; we rescue it back
         // to its host on detach so toggle state and event handlers survive
         // view swaps.
@@ -3167,6 +3168,285 @@
     const pad = n => String(n).padStart(2, "0");
     return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_` +
            `${pad(d.getHours())}${pad(d.getMinutes())}`;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Branded map image export (PNG / PPTX of the current view) — utilities
+  // ported from locator.html's proven export pipeline.
+  // ─────────────────────────────────────────────────────────────────────
+  const MAP_EXPORT = {
+    w: 2400, h: 1350, header: 150,
+    navy: "#0B1F41", logo: "assets/eip-logo.png",
+  };
+
+  function loadImage(src) {
+    return new Promise((res, rej) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = () => rej(new Error("img " + src));
+      im.src = src;
+    });
+  }
+
+  // The brand logo PNG ships with a baked-in opaque BLACK background; logo
+  // content is never pure black, so key near-black pixels transparent.
+  function keyBlack(img) {
+    const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    const x = c.getContext("2d"); x.drawImage(img, 0, 0);
+    const d = x.getImageData(0, 0, w, h), p = d.data;
+    for (let i = 0; i < p.length; i += 4)
+      if (p[i] < 18 && p[i+1] < 18 && p[i+2] < 18) p[i+3] = 0;
+    x.putImageData(d, 0, 0); return c;
+  }
+
+  let _logoPromise = null;
+  function getLogo() {
+    if (!_logoPromise) _logoPromise = (async () => {
+      const img = await loadImage(MAP_EXPORT.logo).catch(() => null);
+      if (!img) return null;
+      return loadImage(keyBlack(img).toDataURL("image/png"));
+    })();
+    return _logoPromise;
+  }
+
+  // takeScreenshot / goTo can stall indefinitely on a render-starved WebGL
+  // context — cap them so a stuck export fails with a toast instead of
+  // freezing the buttons behind the re-entrancy guard forever.
+  function withTimeout(promise, ms, what) {
+    return Promise.race([promise, new Promise((_, rej) =>
+      setTimeout(() => rej(new Error(`${what} timed out after ${ms / 1000}s`)), ms))]);
+  }
+
+  async function settleView(v, ms = 4000) {
+    if (v && v.updating && state._reactiveUtils)
+      await Promise.race([
+        state._reactiveUtils.whenOnce(() => !v.updating),
+        new Promise(r => setTimeout(r, ms)),
+      ]);
+  }
+
+  // Center-crop screenshot of the active view (2D or 3D) at the target
+  // aspect. The DOM widgets (zoom, scale bar, popups) aren't part of the
+  // WebGL canvas, so the shot is clean map only.
+  async function shotCurrentView(aspect) {
+    const view = state.view;
+    if (!view) throw new Error("Map not ready");
+    view.closePopup();
+    await settleView(view, 5000);
+    const vw = view.width, vh = view.height;
+    if (!vw || !vh) throw new Error("Map view has no size");
+    let aw, ah;
+    if (vw / vh > aspect) { ah = vh; aw = ah * aspect; }
+    else                  { aw = vw; ah = aw / aspect; }
+    const ax = (vw - aw) / 2, ay = (vh - ah) / 2;
+    const outW = MAP_EXPORT.w, outH = Math.round(outW / aspect);
+    const s = await withTimeout(
+      view.takeScreenshot({
+        area: { x: ax, y: ay, width: aw, height: ah },
+        width: outW, height: outH, format: "png",
+      }), 20000, "Map render");
+    return loadImage(s.dataUrl);
+  }
+
+  // The features the map is actually showing (mirrors arcgisWhereClause
+  // semantics: selection in show-selected mode, otherwise the filtered set)
+  function mapExportFeatures() {
+    return state.showSelectedOnly
+      ? state.allFeatures.filter(f => state.selection.has(f.properties.EIPProjectNumber))
+      : state.allFeatures.filter(passesFilters);
+  }
+
+  function activeFilterSummary() {
+    const bits = [];
+    const catPills = document.querySelectorAll("#category-filters .filter-pill").length;
+    if (state.activeCategories.size < catPills)
+      bits.push("Focus: " + Array.from(state.activeCategories)
+        .map(c => FOCUS_AREA_SHORT[c] || c).join(", "));
+    const stgPills = document.querySelectorAll("#stage-filters .filter-pill").length;
+    if (state.activeStages.size < stgPills)
+      bits.push("Stage: " + Array.from(state.activeStages)
+        .map(s => s === NONE ? "Unspecified" : s).join(", "));
+    if (state.activePrograms.size)      bits.push("Program: " + Array.from(state.activePrograms).join(", "));
+    if (state.activeJurisdictions.size) bits.push("Jurisdiction: " + Array.from(state.activeJurisdictions).join(", "));
+    if (state.activeWatersheds.size)    bits.push("Watershed: " + Array.from(state.activeWatersheds).join(", "));
+    const flags = [
+      state.flagEIP && "EIP", state.flagTransportation && "Transportation",
+      state.flagLakeClarity && "Lake Clarity",
+    ].filter(Boolean);
+    if (flags.length) bits.push("Type: " + flags.join(", "));
+    if (state.searchTerm) bits.push(`Search: "${state.searchTerm}"`);
+    if (state.showSelectedOnly) bits.push(`${state.selection.size} selected projects`);
+    return bits.join("  ·  ");
+  }
+
+  function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath(); ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+
+  async function composeCurrentMap() {
+    // Force the brand font before any canvas text — a cold font cache
+    // silently falls back to sans-serif mid-composite otherwise.
+    if (document.fonts)
+      await Promise.all([400, 600, 700].map(w =>
+        document.fonts.load(`${w} 40px 'Lexend Deca'`))).catch(() => {});
+
+    const W = MAP_EXPORT.w, H = MAP_EXPORT.h, HEAD = MAP_EXPORT.header;
+    const aspect = W / (H - HEAD);
+    const [shot, logo] = await Promise.all([shotCurrentView(aspect), getLogo()]);
+
+    const cv = document.createElement("canvas");
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext("2d");
+    const FONT = "'Lexend Deca', sans-serif";
+
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+    ctx.drawImage(shot, 0, HEAD, W, H - HEAD);
+
+    // ── Navy header: logo · title + filter summary · date + count ──
+    ctx.fillStyle = MAP_EXPORT.navy; ctx.fillRect(0, 0, W, HEAD);
+    const pad = 48;
+    let x = pad;
+    if (logo) {
+      const lh = HEAD - 48, lw = logo.width * (lh / logo.height);
+      ctx.drawImage(logo, x, (HEAD - lh) / 2, lw, lh);
+      x += lw + 40;
+    }
+    const summary = activeFilterSummary();
+    ctx.fillStyle = "#fff"; ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.font = `700 54px ${FONT}`;
+    ctx.fillText("EIP Projects Map", x, summary ? HEAD / 2 - 22 : HEAD / 2);
+    if (summary) {
+      ctx.font = `400 26px ${FONT}`;
+      ctx.fillStyle = "rgba(255,255,255,0.78)";
+      // Ellipsize to the space left of the right-aligned date block
+      let text = summary;
+      const maxW = W - x - 560;
+      while (text.length > 8 && ctx.measureText(text).width > maxW)
+        text = text.slice(0, -8).trimEnd() + "…";
+      ctx.fillText(text, x, HEAD / 2 + 32);
+    }
+    const feats = mapExportFeatures();
+    const dateStr = new Date().toLocaleDateString("en-US",
+      { year: "numeric", month: "long", day: "numeric" });
+    ctx.textAlign = "right";
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.font = `600 30px ${FONT}`;
+    ctx.fillText(`${feats.length.toLocaleString()} projects`, W - pad, HEAD / 2 - 20);
+    ctx.font = `400 26px ${FONT}`;
+    ctx.fillStyle = "rgba(255,255,255,0.66)";
+    ctx.fillText(dateStr, W - pad, HEAD / 2 + 22);
+    ctx.textAlign = "left";
+
+    // ── Legend card (bottom-left) — categories present on the map ──
+    const cats = FOCUS_AREA_ORDER.filter(c => feats.some(f => categoryOf(f) === c));
+    if (cats.length) {
+      const rowH = 52, cardPad = 30, titleH = 48;
+      ctx.font = `500 30px ${FONT}`;
+      const wMax = Math.max(240, ...cats.map(c =>
+        ctx.measureText(FOCUS_AREA_SHORT[c] || c).width + 66));
+      const cardW = wMax + cardPad * 2, cardH = titleH + cats.length * rowH + cardPad * 1.5;
+      const cx = 36, cy = H - cardH - 36;
+      ctx.save();
+      ctx.globalAlpha = 0.94;
+      ctx.fillStyle = "#fff";
+      roundRectPath(ctx, cx, cy, cardW, cardH, 14); ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = MAP_EXPORT.navy;
+      ctx.font = `700 26px ${FONT}`;
+      ctx.fillText("EIP FOCUS AREAS", cx + cardPad, cy + cardPad + 8);
+      cats.forEach((c, i) => {
+        const yy = cy + titleH + cardPad / 2 + i * rowH + rowH / 2 - 6;
+        const col = CATEGORY_COLOR[c] || [154, 163, 173, 0.85];
+        ctx.beginPath(); ctx.arc(cx + cardPad + 16, yy, 15, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${col[3]})`; ctx.fill();
+        ctx.strokeStyle = "#fff"; ctx.lineWidth = 3; ctx.stroke();
+        ctx.fillStyle = MAP_EXPORT.navy;
+        ctx.font = `500 30px ${FONT}`;
+        ctx.fillText(FOCUS_AREA_SHORT[c] || c, cx + cardPad + 48, yy);
+      });
+    }
+
+    // ── Source attribution (bottom-right, over the map) ──
+    ctx.textAlign = "right";
+    ctx.font = `400 22px ${FONT}`;
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 6;
+    ctx.fillText("Data: LakeTahoeInfo · Basemap: Esri", W - 24, H - 24);
+    ctx.shadowBlur = 0; ctx.textAlign = "left";
+
+    return cv;
+  }
+
+  // PptxGenJS on demand — the UMD bundle registers with Dojo's AMD define
+  // if visible ("multipleDefine" crash under the ArcGIS loader), so mask
+  // `define` while it loads (same pattern as ensureShpWrite below).
+  let _pptxLoadPromise = null;
+  function ensurePptx() {
+    if (typeof window.PptxGenJS !== "undefined") return Promise.resolve();
+    if (_pptxLoadPromise) return _pptxLoadPromise;
+    _pptxLoadPromise = new Promise((resolve, reject) => {
+      const savedDefine = window.define;
+      window.define = undefined;
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/pptxgenjs@4.0.1/dist/pptxgen.bundle.js";
+      s.onload = () => {
+        window.define = savedDefine;
+        if (typeof window.PptxGenJS === "undefined")
+          reject(new Error("PptxGenJS loaded but global is missing"));
+        else resolve();
+      };
+      s.onerror = () => {
+        window.define = savedDefine;
+        _pptxLoadPromise = null;   // allow retry after a network hiccup
+        reject(new Error("PptxGenJS CDN load failed"));
+      };
+      document.head.appendChild(s);
+    });
+    return _pptxLoadPromise;
+  }
+
+  let _mapExporting = false;
+  async function runMapExport(btn, worker) {
+    if (!state.view || _mapExporting) return;
+    _mapExporting = true;
+    const origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.textContent = "Rendering…";
+    try { await worker(); }
+    catch (e) {
+      console.error("Map export failed:", e);
+      toast("Export failed — " + (e.message || "see console"), "error");
+    } finally {
+      _mapExporting = false;
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
+  }
+
+  function setupMapImageButtons() {
+    const png = document.getElementById("export-map-png");
+    const ppt = document.getElementById("export-map-pptx");
+    png.addEventListener("click", () => runMapExport(png, async () => {
+      const cv = await composeCurrentMap();
+      const blob = await new Promise(r => cv.toBlob(r, "image/png"));
+      if (!blob) throw new Error("Canvas encode failed");
+      downloadBlob(blob, `eip-projects-map_${timestamp()}.png`);
+      toast("Map PNG downloaded");
+    }));
+    ppt.addEventListener("click", () => runMapExport(ppt, async () => {
+      await ensurePptx();
+      const cv = await composeCurrentMap();
+      const pptx = new window.PptxGenJS();
+      pptx.layout = "LAYOUT_WIDE";   // true 16:9 (13.333 × 7.5 in)
+      pptx.addSlide().addImage({
+        data: cv.toDataURL("image/png"), x: 0, y: 0, w: 13.333, h: 7.5,
+      });
+      await pptx.writeFile({ fileName: `eip-projects-map_${timestamp()}.pptx` });
+      toast("Map PPTX downloaded");
+    }));
   }
 
   function downloadBlob(blob, filename) {
@@ -3725,6 +4005,7 @@
       setupSearch();
       setupSelectionButtons();
       setupExportButtons();
+      setupMapImageButtons();
       setupFootprintsToggle();
       setupClusterToggle();
       setup3DToggle();
