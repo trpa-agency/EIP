@@ -1361,6 +1361,16 @@
     txt.textContent = text;
   }
 
+  // One phrasing for the headline count everywhere: mapped points out of
+  // the full EIP project total (spatial + basin-wide). The header status,
+  // stats panel, and branded export all derive from this so they can't
+  // show conflicting totals.
+  function statusCountText() {
+    const mapped = state.allFeatures.length;
+    const total = mapped + state.aspatialRecords.length;
+    return `Snapshot · ${mapped.toLocaleString()} of ${total.toLocaleString()} projects mapped`;
+  }
+
   function toast(message, kind = "info") {
     const el = document.getElementById("toast");
     el.textContent = message;
@@ -3447,7 +3457,7 @@
     ctx.textAlign = "right";
     ctx.fillStyle = "rgba(255,255,255,0.85)";
     ctx.font = `600 30px ${FONT}`;
-    ctx.fillText(`${feats.length.toLocaleString()} projects`, W - pad, HEAD / 2 - 20);
+    ctx.fillText(`${feats.length.toLocaleString()} projects mapped`, W - pad, HEAD / 2 - 20);
     ctx.font = `400 26px ${FONT}`;
     ctx.fillStyle = "rgba(255,255,255,0.66)";
     ctx.fillText(dateStr, W - pad, HEAD / 2 + 22);
@@ -3867,8 +3877,9 @@
   function computeStats() {
     const { filtered } = computeFilteredSets();
     const byCat = new Map(), byStage = new Map();
-    let cost = 0, spent = 0;
+    let cost = 0, spent = 0, mapped = 0;
     for (const f of filtered) {
+      if (!f._aspatial) mapped++;
       const p = f.properties;
       const c = categoryOf(f);
       byCat.set(c, (byCat.get(c) || 0) + 1);
@@ -3877,7 +3888,7 @@
       cost  += +p.EstimatedTotalCost || 0;
       spent += +p.TotalExpenditure   || 0;
     }
-    return { n: filtered.length, byCat, byStage, cost, spent };
+    return { n: filtered.length, mapped, byCat, byStage, cost, spent };
   }
 
   let _statsOpen = false, _plotlyReady = false;
@@ -3885,7 +3896,7 @@
   function renderStatsNow() {
     if (!_statsOpen || !_plotlyReady || !window.Plotly) return;
     const s = computeStats();
-    const bits = [`${s.n.toLocaleString()} projects`];
+    const bits = [`${s.n.toLocaleString()} projects (${s.mapped.toLocaleString()} mapped)`];
     const fc = formatCurrency(s.cost);
     if (fc) bits.push(fc + " estimated cost");
     const fx = formatCurrency(s.spent);
@@ -4253,7 +4264,7 @@
       buildMap(local);
       refreshSelectionUI();
 
-      setStatus("snapshot", `Snapshot · ${local.features.length.toLocaleString()} projects`);
+      setStatus("snapshot", statusCountText());
     } catch (err) {
       console.error("Failed to load local snapshot:", err);
       setStatus("error", "Failed to load data");
@@ -4271,7 +4282,7 @@
       const drift = fcChanged(localFC, live);
       const note = drift
         ? `Live (delta detected — snapshot may be stale)`
-        : `Snapshot · ${state.allFeatures.length.toLocaleString()} projects`;
+        : statusCountText();
       setStatus(drift ? "snapshot" : "snapshot", note);
     } catch (err) {
       console.warn("Live ping skipped:", err.message);
