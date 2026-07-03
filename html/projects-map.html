@@ -51,6 +51,18 @@
     calcite-shell { height: 100vh; }
     calcite-shell-panel#cs-sidebar { --calcite-shell-panel-min-width: 280px; --calcite-shell-panel-max-width: 280px; }
     calcite-shell-panel#cs-list    { --calcite-shell-panel-min-width: 340px; --calcite-shell-panel-max-width: 340px; }
+    /* Phones — narrower panels (they float over the map via display-mode
+       set in applyPrefs) and a slimmed-down header */
+    @media (max-width: 480px) {
+      calcite-shell-panel#cs-sidebar,
+      calcite-shell-panel#cs-list {
+        --calcite-shell-panel-min-width: min(85vw, 300px);
+        --calcite-shell-panel-max-width: min(85vw, 300px);
+      }
+      #app-header { padding: 0 0.75rem; gap: 0.5rem; }
+      .back-link, .header-divider { display: none; }
+      #status-text { display: none; }
+    }
     /* Make the inner panels fill their shell-panel container */
     calcite-shell-panel #sidebar,
     calcite-shell-panel #list-panel {
@@ -174,6 +186,24 @@
       color: var(--eip-navy);
       opacity: 0.62;
       margin-bottom: 0.3rem;
+    }
+    .label-hint {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 13px; height: 13px;
+      margin-left: 0.25rem;
+      border-radius: 50%;
+      border: 1px solid currentColor;
+      font-size: 0.56rem;
+      font-weight: 700;
+      line-height: 1;
+      cursor: help;
+      user-select: none;
+    }
+    .label-hint:focus-visible {
+      outline: 2px solid var(--eip-blue);
+      outline-offset: 1px;
     }
 
     /* Calcite Block visuals — secondary filters are tucked inside collapsibles */
@@ -918,18 +948,35 @@
     <aside id="sidebar">
       <div class="sidebar-section filters-section">
         <div class="filter-block">
-          <div class="filter-block-label">EIP Focus Area</div>
+          <div class="filter-block-label">EIP Focus Area
+            <span class="label-hint" id="hint-focus" tabindex="0" role="button"
+              aria-label="About the Focus Area filter">?</span>
+          </div>
+          <calcite-tooltip id="tip-focus" placement="right-start">
+            The EIP's four official focus areas, derived from each
+            project's EIP number. Click pills to show only those areas —
+            with none selected, everything shows.
+          </calcite-tooltip>
           <div id="category-filters" class="filter-pills-grid"></div>
         </div>
 
         <div class="filter-block">
-          <div class="filter-block-label">Stage</div>
+          <div class="filter-block-label">Stage
+            <span class="label-hint" id="hint-stage" tabindex="0" role="button"
+              aria-label="About the Stage filter">?</span>
+          </div>
+          <calcite-tooltip id="tip-stage" placement="right-start">
+            Where each project is in its lifecycle — from proposed and
+            planning through construction to completed. Click pills to
+            filter; none selected shows all stages.
+          </calcite-tooltip>
           <div id="stage-filters" class="filter-pills-grid"></div>
         </div>
 
         <div class="filter-group-label">More filters</div>
 
-        <calcite-block heading="Project type" collapsible scale="s" id="project-type-block">
+        <calcite-block heading="Project type" collapsible scale="s" id="project-type-block"
+          description="Cross-cutting flags — a project can carry several">
           <div id="project-type-pills" class="filter-pills-grid">
             <button class="filter-pill" data-flag="IsEIPProject"
               style="--c: #5a6577; --c-on-text: var(--white);"
@@ -943,15 +990,18 @@
           </div>
         </calcite-block>
 
-        <calcite-block heading="Program" collapsible scale="s" id="program-block">
+        <calcite-block heading="Program" collapsible scale="s" id="program-block"
+          description="LakeTahoeInfo program the project reports under">
           <div id="program-pills" class="filter-pills-grid"></div>
         </calcite-block>
 
-        <calcite-block heading="Jurisdiction" collapsible scale="s" id="jurisdiction-block">
+        <calcite-block heading="Jurisdiction" collapsible scale="s" id="jurisdiction-block"
+          description="City or county where the project sits">
           <div id="jurisdiction-pills" class="filter-pills-grid"></div>
         </calcite-block>
 
-        <calcite-block heading="Watershed" collapsible scale="s" id="watershed-block">
+        <calcite-block heading="Watershed" collapsible scale="s" id="watershed-block"
+          description="Search and pick one or more watersheds">
           <input id="watershed-search" class="pill-search" type="text"
             placeholder="Search watersheds…" autocomplete="off"
             aria-label="Search watershed names" />
@@ -1246,6 +1296,81 @@
     el.classList.add("show");
     clearTimeout(toast._t);
     toast._t = setTimeout(() => el.classList.remove("show"), 2400);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Persisted preferences — panel collapse, cluster, footprints, basemap,
+  // 2D/3D. Silently no-ops where localStorage is unavailable (private
+  // browsing, blocked third-party storage).
+  // ─────────────────────────────────────────────────────────────────────
+  const PREFS_KEY = "eip-projects-map-prefs";
+  let restoringPrefs = false;
+
+  function loadPrefs() {
+    try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; }
+    catch { return {}; }
+  }
+  function savePref(key, val) {
+    if (restoringPrefs) return;
+    try {
+      const p = loadPrefs();
+      p[key] = val;
+      localStorage.setItem(PREFS_KEY, JSON.stringify(p));
+    } catch { /* storage unavailable */ }
+  }
+  function clearPrefs() {
+    try { localStorage.removeItem(PREFS_KEY); } catch { /* ignore */ }
+  }
+
+  // Restore persisted preferences. Called from buildMap once the initial
+  // 2D view is active — pointsLayer, map, and the 2D/3D activators all
+  // exist by then, and the setup* functions have already run in init().
+  async function applyPrefs() {
+    const p = loadPrefs();
+    const smallScreen = window.matchMedia("(max-width: 480px)").matches;
+    restoringPrefs = true;
+    try {
+      // Panels — on phones they float over the map instead of docking
+      // (docked, the two panels alone outgrow a 375px viewport), and both
+      // start collapsed unless the user has a saved preference.
+      if (smallScreen) {
+        document.getElementById("cs-sidebar").displayMode = "overlay";
+        document.getElementById("cs-list").displayMode = "overlay";
+      }
+      const sidebarCollapsed = p.sidebar !== undefined ? p.sidebar : smallScreen;
+      const listCollapsed    = p.list    !== undefined ? p.list    : smallScreen;
+      if (sidebarCollapsed) setupPanelCollapse._setSidebarCollapsed(true);
+      if (listCollapsed)    setupPanelCollapse._setListCollapsed(true);
+
+      if (p.cluster) {
+        document.getElementById("cluster-toggle").checked = true;
+        setClusterEnabled(true);
+      }
+      if (p.footprints) {
+        document.getElementById("footprints-toggle").checked = true;
+        // Lazy 7 MB fetch; on failure it toasts + rolls the switch back.
+        setFootprintsVisible(true);
+      }
+      if (p.threeD && state._activate3D) {
+        const sw = document.getElementById("threed-toggle");
+        const status = document.getElementById("threed-status");
+        sw.checked = true;
+        status.textContent = "Loading 3D…";
+        try {
+          await state._activate3D();
+          status.textContent = "3D scene · right-drag to tilt, scroll to zoom";
+        } catch (e) {
+          console.warn("3D restore failed:", e);
+          sw.checked = false;
+          status.textContent = "2D flat map";
+        }
+      }
+      if (p.altBasemap && state.view) {
+        state.view.map.basemap = state.view.type === "3d" ? "topo-vector" : "hybrid";
+      }
+    } finally {
+      restoringPrefs = false;
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -2231,6 +2356,19 @@
         layers: [boundary, layer],
       });
 
+      // Persist whether the user is on the non-default basemap for the
+      // current view type (2D: gray-vector→hybrid, 3D: hybrid→topo-vector).
+      // activateView resets the basemap on 2D⇄3D switch, so the saved flag
+      // always mirrors what's actually on screen.
+      map.watch("basemap", bm => {
+        const def = state.view && state.view.type === "3d" ? "hybrid" : "gray-vector";
+        const alt = !!bm && bm.id !== def;
+        // Only write on change — the watch fires async, and an unchanged
+        // default would otherwise recreate the key right after resetApp
+        // clears it.
+        if (alt !== !!loadPrefs().altBasemap) savePref("altBasemap", alt);
+      });
+
       // Extent of the Tahoe Basin (covers Truckee → Meyers, west shore → Carson Valley fringe)
       // — fits whole basin regardless of viewport aspect ratio / panel state
       const BASIN_EXTENT = {
@@ -2442,6 +2580,10 @@
         state.pointsLayerView = lv;
         applyFilters();
       });
+
+      // Restore persisted prefs now that the map, layer, and 2D/3D
+      // activators exist.
+      applyPrefs();
     });
   }
 
@@ -2716,6 +2858,7 @@
         // ensureDetailedLoaded already toasted + set the status text —
         // just roll the switch back so the UI reflects reality.
         document.getElementById("footprints-toggle").checked = false;
+        savePref("footprints", false);
         return;
       }
     }
@@ -2989,6 +3132,16 @@
     });
   }
 
+  function setupFilterHints() {
+    // Calcite 5: the reference-element id attribute doesn't resolve —
+    // assign the element programmatically (same fix as locator.html).
+    for (const [tipId, refId] of [["tip-focus", "hint-focus"], ["tip-stage", "hint-stage"]]) {
+      const tip = document.getElementById(tipId);
+      const ref = document.getElementById(refId);
+      if (tip && ref) tip.referenceElement = ref;
+    }
+  }
+
   function setupPanelCollapse() {
     const csSidebar = document.getElementById("cs-sidebar");
     const csList    = document.getElementById("cs-list");
@@ -2999,11 +3152,13 @@
       csSidebar.collapsed = yes;
       sidebarTab.setAttribute("aria-expanded", yes ? "false" : "true");
       sidebarTab.title = yes ? "Show filters panel" : "Hide filters panel";
+      savePref("sidebar", yes);
     }
     function setListCollapsed(yes) {
       csList.collapsed = yes;
       listTab.setAttribute("aria-expanded", yes ? "false" : "true");
       listTab.title = yes ? "Show projects panel" : "Hide projects panel";
+      savePref("list", yes);
     }
 
     sidebarTab.addEventListener("click", () => setSidebarCollapsed(!csSidebar.collapsed));
@@ -3082,6 +3237,7 @@
     const sw = document.getElementById("cluster-toggle");
     sw.addEventListener("calciteSwitchChange", e => {
       setClusterEnabled(e.target.checked);
+      savePref("cluster", e.target.checked);
     });
   }
 
@@ -3100,6 +3256,7 @@
         status.textContent = on
           ? "3D scene · right-drag to tilt, scroll to zoom"
           : "2D flat map";
+        savePref("threeD", on);
       } catch (err) {
         console.error(err);
         toast("Couldn't switch view", "error");
@@ -3158,7 +3315,13 @@
         const target = state._basinExtent || { center: [-120.04, 39.09], zoom: 9 };
         state.view.goTo(target, { duration: 400 }).catch(() => {});
       }
+      // Basemap back to the per-view default (the 3D→2D switch above
+      // already resets it synchronously when it runs)
+      state.view.map.basemap = state.view.type === "3d" ? "hybrid" : "gray-vector";
     }
+    // Forget saved preferences last — the setters above re-save defaults
+    // as they run, so the remove has to win.
+    clearPrefs();
     toast("Reset to defaults");
   }
 
@@ -3166,6 +3329,7 @@
     const sw = document.getElementById("footprints-toggle");
     sw.addEventListener("calciteSwitchChange", e => {
       setFootprintsVisible(e.target.checked);
+      savePref("footprints", e.target.checked);
     });
     // disable include-footprints checkbox until layer toggled on
     document.getElementById("include-footprints-row").setAttribute("disabled", "");
@@ -3237,6 +3401,7 @@
       setupClusterToggle();
       setup3DToggle();
       setupPanelCollapse();
+      setupFilterHints();
       setupProjectCardClose();
       buildMap(local);
       refreshSelectionUI();
