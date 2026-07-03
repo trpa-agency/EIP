@@ -20,9 +20,12 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
+        # geopandas is required for the detailed-footprints dissolve —
+        # without it the script falls back to the raw feed (8,500+
+        # fragment features, ~3x the file size).
         run: |
           python -m pip install --upgrade pip
-          pip install pandas requests
+          pip install pandas requests geopandas
 
       - name: Run pipeline
         # arcpy is unavailable on the runner; the script gates the GDB step
@@ -33,7 +36,8 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/simple.json data/detailed.geojson data/projects.geojson
+          git add data/simple.json data/detailed.geojson data/projects.geojson \
+                  data/projects_aspatial.json data/detailed_eips.json
           if git diff --cached --quiet; then
             echo "No data changes."
           else

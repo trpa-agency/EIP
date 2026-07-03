@@ -1022,6 +1022,16 @@
           </div>
         </calcite-block>
 
+        <calcite-block heading="Funding source" collapsible scale="s" id="funding-block"
+          description="Who has funded the work to date">
+          <input id="funding-search" class="pill-search" type="text"
+            placeholder="Search funding sources…" autocomplete="off"
+            aria-label="Search funding source names" />
+          <div class="pill-grid-scroll">
+            <div id="funding-pills" class="filter-pills-grid"></div>
+          </div>
+        </calcite-block>
+
         <div class="reset-row">
           <button id="reset-filters" class="reset-pill" type="button"
             title="Restore all filter pills, comboboxes, search, and project-type flags to their defaults">
@@ -1253,6 +1263,8 @@
     { name: "TMDLPollutantSourceCategory", type: "string" },
     { name: "EstimatedTotalCost",        type: "double" },
     { name: "EstimatedAnnualOperatingCost", type: "double" },
+    { name: "FundingSources",            type: "string", alias: "Funding Sources" }, // "; "-joined distinct sources
+    { name: "TotalExpenditure",          type: "double", alias: "Total Expenditure" },
     { name: "IsEIPProject",              type: "small-integer" },   // boolean coerced to 0/1
     { name: "IsTransportationProject",   type: "small-integer" },
     { name: "IsLakeClarityProject",      type: "small-integer" },
@@ -1287,6 +1299,7 @@
     activePrograms: new Set(),       // empty = no constraint
     activeJurisdictions: new Set(),  // empty = no constraint
     activeWatersheds: new Set(),     // empty = no constraint
+    activeFundingSources: new Set(), // empty = no constraint (multi-value field)
     flagEIP: false,                  // true → require IsEIPProject = true
     flagTransportation: false,
     flagLakeClarity: false,
@@ -1837,6 +1850,23 @@
       });
   }
 
+  // Like uniqueValues, but for "; "-joined multi-value fields
+  // (FundingSources) — each record counts once per distinct value.
+  function uniqueMultiValues(propName) {
+    const counts = new Map();
+    for (const f of state.allFeatures) {
+      const raw = f.properties[propName];
+      const vals = raw ? String(raw).split("; ") : [NONE];
+      for (const v of vals) counts.set(v, (counts.get(v) || 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => {
+        if (a[0] === NONE) return 1;
+        if (b[0] === NONE) return -1;
+        return a[0].localeCompare(b[0]);
+      });
+  }
+
   // ─────────────────────────────────────────────────────────────────────
   // Secondary pill filters (Program / Jurisdiction / Watershed) — same
   // pill style as Focus Area / Stage but neutral-colored to read as
@@ -1844,10 +1874,10 @@
   // ─────────────────────────────────────────────────────────────────────
   const SECONDARY_PILL_COLOR = "#5a6577";   // calm gray-navy
 
-  function setupPillFilter(containerId, propName, activeSet) {
+  function setupPillFilter(containerId, propName, activeSet, valuesFn = uniqueValues) {
     const container = document.getElementById(containerId);
     container.innerHTML = "";
-    for (const [val, count] of uniqueValues(propName)) {
+    for (const [val, count] of valuesFn(propName)) {
       const display = val === NONE ? "Unspecified" : val;
       const btn = document.createElement("button");
       btn.type = "button";
@@ -1869,11 +1899,11 @@
     }
   }
 
-  function setupWatershedSearch() {
-    const input = document.getElementById("watershed-search");
+  function setupPillSearch(inputId, containerId) {
+    const input = document.getElementById(inputId);
     input.addEventListener("input", e => {
       const q = e.target.value.trim().toLowerCase();
-      document.querySelectorAll("#watershed-pills .filter-pill").forEach(p => {
+      document.querySelectorAll(`#${containerId} .filter-pill`).forEach(p => {
         const v = (p.dataset.value || "").toLowerCase();
         p.hidden = q && !v.includes(q);
       });
@@ -1884,7 +1914,10 @@
     setupPillFilter("program-pills",      "EIPProgram",          state.activePrograms);
     setupPillFilter("jurisdiction-pills", "ProjectJurisdiction", state.activeJurisdictions);
     setupPillFilter("watershed-pills",    "ProjectWatershed",    state.activeWatersheds);
-    setupWatershedSearch();
+    setupPillFilter("funding-pills",      "FundingSources",      state.activeFundingSources,
+                    uniqueMultiValues);
+    setupPillSearch("watershed-search", "watershed-pills");
+    setupPillSearch("funding-search",   "funding-pills");
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -1929,7 +1962,7 @@
     });
 
     // Secondary pill filters — turn all off (combobox semantics: empty = no filter)
-    for (const id of ["program-pills", "jurisdiction-pills", "watershed-pills"]) {
+    for (const id of ["program-pills", "jurisdiction-pills", "watershed-pills", "funding-pills"]) {
       document.querySelectorAll(`#${id} .filter-pill.is-on`).forEach(btn => {
         btn.classList.remove("is-on");
         btn.setAttribute("aria-pressed", "false");
@@ -1938,11 +1971,15 @@
     state.activePrograms.clear();
     state.activeJurisdictions.clear();
     state.activeWatersheds.clear();
-    // Also clear the watershed search input
-    const ws = document.getElementById("watershed-search");
-    if (ws) {
-      ws.value = "";
-      document.querySelectorAll("#watershed-pills .filter-pill").forEach(p => p.hidden = false);
+    state.activeFundingSources.clear();
+    // Also clear the pill search inputs
+    for (const [inputId, pillsId] of [["watershed-search", "watershed-pills"],
+                                      ["funding-search", "funding-pills"]]) {
+      const el = document.getElementById(inputId);
+      if (el) {
+        el.value = "";
+        document.querySelectorAll(`#${pillsId} .filter-pill`).forEach(p => p.hidden = false);
+      }
     }
 
     // Flag pills — turn all off
@@ -1978,6 +2015,11 @@
     if (state.activePrograms.size && !state.activePrograms.has(dimVal(p.EIPProgram))) return false;
     if (state.activeJurisdictions.size && !state.activeJurisdictions.has(dimVal(p.ProjectJurisdiction))) return false;
     if (state.activeWatersheds.size && !state.activeWatersheds.has(dimVal(p.ProjectWatershed))) return false;
+    // Funding sources (multi-value "; "-joined; NONE matches unfunded/unknown)
+    if (state.activeFundingSources.size) {
+      const vals = p.FundingSources ? String(p.FundingSources).split("; ") : [NONE];
+      if (!vals.some(v => state.activeFundingSources.has(v))) return false;
+    }
     // Flags (only filter when on)
     if (state.flagEIP            && !p.IsEIPProject)            return false;
     if (state.flagTransportation && !p.IsTransportationProject) return false;
@@ -2026,6 +2068,19 @@
     if (state.activeWatersheds.size)
       clauses.push(buildSetClause("ProjectWatershed", state.activeWatersheds));
 
+    // Funding sources — the field is "; "-joined, so match each selected
+    // source with boundary-safe LIKEs (plain '%s%' would let "Tahoe Fund"
+    // match "Tahoe Fund II")
+    if (state.activeFundingSources.size) {
+      const parts = Array.from(state.activeFundingSources).map(v => {
+        if (v === NONE) return "(FundingSources IS NULL OR FundingSources = '')";
+        const s = escSql(v);
+        return `(FundingSources = '${s}' OR FundingSources LIKE '${s}; %' ` +
+               `OR FundingSources LIKE '%; ${s}' OR FundingSources LIKE '%; ${s}; %')`;
+      });
+      clauses.push("(" + parts.join(" OR ") + ")");
+    }
+
     // Flags — GeoJSONLayer infers booleans as small-int 1/0 for SQL
     if (state.flagEIP)            clauses.push("IsEIPProject = 1");
     if (state.flagTransportation) clauses.push("IsTransportationProject = 1");
@@ -2070,7 +2125,8 @@
 
     for (const [k, set] of [["prg", state.activePrograms],
                             ["jur", state.activeJurisdictions],
-                            ["ws",  state.activeWatersheds]]) {
+                            ["ws",  state.activeWatersheds],
+                            ["fs",  state.activeFundingSources]]) {
       if (set.size) add(k, Array.from(set).map(encodeURIComponent).join("~"));
     }
 
@@ -2134,6 +2190,7 @@
     if (sp.has("prg")) u.prg = sp.get("prg").split("~").filter(Boolean);
     if (sp.has("jur")) u.jur = sp.get("jur").split("~").filter(Boolean);
     if (sp.has("ws"))  u.ws  = sp.get("ws").split("~").filter(Boolean);
+    if (sp.has("fs"))  u.fs  = sp.get("fs").split("~").filter(Boolean);
     if (sp.has("fl"))  u.fl  = sp.get("fl");
     if (sp.has("q"))   u.q   = sp.get("q");
     if (sp.has("sel")) u.sel = sp.get("sel").split(",").filter(Boolean);
@@ -2188,6 +2245,7 @@
         [u.prg, "program-pills",      state.activePrograms],
         [u.jur, "jurisdiction-pills", state.activeJurisdictions],
         [u.ws,  "watershed-pills",    state.activeWatersheds],
+        [u.fs,  "funding-pills",      state.activeFundingSources],
       ]) {
         if (!vals) continue;
         set.clear();
@@ -3270,6 +3328,9 @@
     if (state.activePrograms.size)      bits.push("Program: " + Array.from(state.activePrograms).join(", "));
     if (state.activeJurisdictions.size) bits.push("Jurisdiction: " + Array.from(state.activeJurisdictions).join(", "));
     if (state.activeWatersheds.size)    bits.push("Watershed: " + Array.from(state.activeWatersheds).join(", "));
+    if (state.activeFundingSources.size)
+      bits.push("Funding: " + Array.from(state.activeFundingSources)
+        .map(v => v === NONE ? "Unspecified" : v).join(", "));
     const flags = [
       state.flagEIP && "EIP", state.flagTransportation && "Transportation",
       state.flagLakeClarity && "Lake Clarity",
@@ -3512,6 +3573,8 @@
       ["EndDate",                  "EndDate"],
       ["EstimatedTotalCost",       "EstTotalCost"],
       ["EstimatedAnnualOperatingCost", "EstAnnualOperatingCost"],
+      ["FundingSources",           "FundingSources"],
+      ["TotalExpenditure",         "TotalExpenditure"],
       ["ProjectThresholdCategories",   "ThresholdCategories"],
       ["EIPActionPriority",        "ActionPriority"],
       ["TMDLPollutantSourceCategory", "TMDLPollutantSourceCategory"],
