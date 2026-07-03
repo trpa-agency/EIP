@@ -73,6 +73,10 @@ DETAILED_URL = (
 GET_PROJECT_URL = (
     f"https://www.laketahoeinfo.org/WebServices/GetProject/JSON/{API_KEY}/{{eip}}"
 )
+EXPENDITURES_URL = (
+    f"https://www.laketahoeinfo.org/WebServices/"
+    f"GetProjectExpenditures/JSON/{API_KEY}/{{eip}}"
+)
 PROJECT_URL_TEMPLATE = "https://www.laketahoeinfo.org/Project/Detail/{project_id}"
 
 # Fields from GetProject we copy into projects.geojson properties.
@@ -232,6 +236,73 @@ def fetch_all_project_details(eip_numbers, max_workers: int = 8):
                 if rec is not None:
                     out[eip] = rec
     return out
+
+
+def fetch_project_expenditures(eip: str, session: requests.Session, timeout: int = 15):
+    """Return GetProjectExpenditures rows for one EIP # (list of
+    {Year, FundingSource, Expenditure}) or None on failure."""
+    for candidate in _eip_lookup_candidates(eip):
+        url = EXPENDITURES_URL.format(eip=candidate)
+        try:
+            resp = session.get(url, timeout=timeout)
+            if resp.status_code == 404:
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+            if isinstance(data, list):
+                return data
+        except (requests.RequestException, ValueError):
+            continue
+    return None
+
+
+def fetch_all_project_expenditures(eip_numbers, max_workers: int = 8):
+    """Parallel-fetch GetProjectExpenditures for every EIP #. Returns dict
+    EIP -> rows. EIPs that 404 / time out are silently skipped (non-fatal
+    by construction — the funding fields just stay None for those)."""
+    out = {}
+    if not eip_numbers:
+        return out
+    with requests.Session() as session:
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futures = {
+                ex.submit(fetch_project_expenditures, eip, session): eip
+                for eip in eip_numbers
+            }
+            for fut in as_completed(futures):
+                eip = futures[fut]
+                rows = fut.result()
+                if rows is not None:
+                    out[eip] = rows
+    return out
+
+
+def summarize_expenditures(rows):
+    """Collapse per-year expenditure rows into two filterable props.
+    FundingSources is semicolon-joined (source names contain commas,
+    e.g. 'California Tahoe Conservancy, Prop 68')."""
+    if not rows:
+        return {"FundingSources": None, "TotalExpenditure": None}
+    sources = sorted({
+        str(r.get("FundingSource")).strip()
+        for r in rows
+        if r.get("FundingSource") and str(r.get("FundingSource")).strip()
+    })
+    total = 0.0
+    any_amount = False
+    for r in rows:
+        v = r.get("Expenditure")
+        if v is None:
+            continue
+        try:
+            total += float(v)
+            any_amount = True
+        except (TypeError, ValueError):
+            continue
+    return {
+        "FundingSources": "; ".join(sources) if sources else None,
+        "TotalExpenditure": round(total, 2) if any_amount else None,
+    }
 
 
 def project_url_for(rec: dict, pid_str: str) -> str:
@@ -794,6 +865,14 @@ def build_projects_geojson(df_simple):
     log.info(f"GetProject: {len(details):,}/{len(all_eips):,} returned data "
              f"({time.time() - t0:.1f}s)")
 
+    # Pass 2b — parallel-fetch GetProjectExpenditures (funding sources +
+    # total spent). Separate timed batch; keep 8 workers (polite to LTinfo).
+    t1 = time.time()
+    log.info(f"Fetching GetProjectExpenditures for {len(all_eips)} EIP numbers...")
+    expenditures = fetch_all_project_expenditures(all_eips, max_workers=8)
+    log.info(f"GetProjectExpenditures: {len(expenditures):,}/{len(all_eips):,} "
+             f"returned data ({time.time() - t1:.1f}s)")
+
     def build_props(r, rec):
         pn = str(r.get(pn_key, "")).strip()
         pid = r.get(pid_key) if pid_key else None
@@ -812,6 +891,9 @@ def build_projects_geojson(df_simple):
             if isinstance(val, float) and (val != val):   # NaN
                 val = None
             props[field] = val
+        # Funding enrichment (FundingSources + TotalExpenditure) — both
+        # spatial and aspatial records get the fields (None when unknown)
+        props.update(summarize_expenditures(expenditures.get(pn)))
         return props
 
     # Pass 3 — projects.geojson (spatial features for the map)
