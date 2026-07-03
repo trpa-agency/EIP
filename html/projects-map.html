@@ -1105,6 +1105,8 @@
               title="Add every visible row to your selection">Select visible</button>
             <button class="pill-btn" id="sel-show-only" disabled
               title="Show only the projects you have selected (preview your export)">Show only selected</button>
+            <button class="pill-btn" id="sel-to-locator" disabled
+              title="Open the Project Locator with your selected projects to make a branded locator map (up to 9)">Locator map</button>
             <button class="pill-btn" id="sel-clear" disabled
               title="Clear all selected projects">Clear</button>
           </div>
@@ -2301,6 +2303,9 @@
     document.getElementById("sel-count-text").textContent = n.toLocaleString();
     document.getElementById("sel-clear").disabled = n === 0;
     document.getElementById("sel-show-only").disabled = n === 0;
+    const toLocator = document.getElementById("sel-to-locator");
+    toLocator.disabled = n === 0;
+    toLocator.textContent = n ? `Locator map (${n.toLocaleString()})` : "Locator map";
 
     // If we were showing-selected and selection is now empty, exit that mode
     if (n === 0 && state.showSelectedOnly) {
@@ -3392,6 +3397,28 @@
   function setupSelectionButtons() {
     document.getElementById("sel-all-visible").addEventListener("click", selectVisible);
     document.getElementById("sel-clear").addEventListener("click", clearSelection);
+
+    // Send the selection to the Project Locator (locator.html?eip=a,b,c).
+    // The locator places points only, and caps at 9 numbered pins.
+    const LOCATOR_CAP = 9;
+    document.getElementById("sel-to-locator").addEventListener("click", () => {
+      const ids = Array.from(state.selection);
+      if (!ids.length) return;
+      const spatial = new Set(state.allFeatures.map(f => f.properties.EIPProjectNumber));
+      let take = ids.filter(id => spatial.has(id));
+      const skipped = ids.length - take.length;
+      const capped = Math.max(0, take.length - LOCATOR_CAP);
+      take = take.slice(0, LOCATOR_CAP);
+      if (!take.length) {
+        toast("None of the selected projects have a mappable point", "error");
+        return;
+      }
+      const notes = [];
+      if (skipped) notes.push(`${skipped} basin-wide project${skipped === 1 ? "" : "s"} skipped`);
+      if (capped)  notes.push(`sending the first ${LOCATOR_CAP} of ${take.length + capped}`);
+      if (notes.length) toast("Opening Project Locator — " + notes.join("; "));
+      window.open("locator.html?eip=" + encodeURIComponent(take.join(",")), "_blank", "noopener");
+    });
 
     const showOnly = document.getElementById("sel-show-only");
     showOnly.setAttribute("aria-pressed", "false");

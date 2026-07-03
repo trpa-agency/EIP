@@ -598,6 +598,7 @@
           expandTooltip: "Draw / annotate", collapseTooltip: "Close draw tools" });
         view.ui.add(sketchExpand, "top-right");
         applyBrand();
+        applyEipParam();
       });
 
       buildBasin(Map, MapView, FeatureLayer);
@@ -856,6 +857,41 @@
       }
     }
     function refreshLocations() { drawResult(); updateLocCard(); renderLocationChips(); }
+
+    // ?eip=a,b,c intake — the Projects Map's "Locator map" button opens us
+    // with a comma-separated list of EIP project numbers. Matched against
+    // the same nightly feed the project search uses; exact number first,
+    // digit-only fallback (dot-insensitive). Runs once from view.when().
+    async function applyEipParam() {
+      const ids = (new URLSearchParams(location.search).get("eip") || "")
+        .split(",").map(s => s.trim()).filter(Boolean);
+      if (!ids.length) return;
+      await ensureProjects();
+      if (!projectsCache || !projectsCache.length) {
+        toast("Couldn't load the EIP project list for this link.", 5000);
+        return;
+      }
+      let added = 0, missing = 0, over = 0;
+      for (const id of ids) {
+        const digits = id.replace(/\D/g, "");
+        const p = projectsCache.find(x => x.num === id) ||
+          (digits.length >= 4
+            ? projectsCache.find(x => x.num.replace(/\D/g, "") === digits)
+            : null);
+        if (!p) { missing++; continue; }
+        const loc = buildLoc({ kind: "project", p });
+        if (!loc || locations.some(l => l.key === loc.key)) continue;
+        if (locations.length >= MAX_LOCATIONS) { over++; continue; }
+        locations.push(loc);
+        added++;
+      }
+      if (added) { refreshLocations(); zoomToLocations(); }
+      const bits = [];
+      if (added)   bits.push(`Added ${added} project location${added === 1 ? "" : "s"} from the Projects Map`);
+      if (missing) bits.push(`${missing} not found`);
+      if (over)    bits.push(`${over} over the ${MAX_LOCATIONS}-pin limit`);
+      if (bits.length) toast(bits.join(" · "), 5000);
+    }
 
     function drawResult() {
       if (!pinLayer) return;
