@@ -902,6 +902,16 @@
       <span id="status-text">Loading…</span>
     </div>
     <calcite-action
+      id="header-share"
+      icon="link"
+      text="Copy a link to this view"
+      label="Copy a link to this view"
+      title="Copy a link to this view — filters, selection, and map position"
+      scale="s"
+      appearance="transparent"
+      style="--calcite-color-text-1: #fff; --calcite-color-text-3: #fff;"
+    ></calcite-action>
+    <calcite-action
       id="header-info"
       icon="information"
       text="About this dashboard"
@@ -1327,6 +1337,13 @@
   // exist by then, and the setup* functions have already run in init().
   async function applyPrefs() {
     const p = loadPrefs();
+    const u = state._urlState;
+    // A shared link fully specifies the view toggles — absent keys mean
+    // "off", so prefs must not fill them in or the recipient wouldn't see
+    // what the sender saw. Prefs apply only on a plain (hashless) load.
+    const t = u
+      ? { cluster: u.cl, footprints: u.fp, threeD: u.d3, altBasemap: u.bm }
+      : { cluster: p.cluster, footprints: p.footprints, threeD: p.threeD, altBasemap: p.altBasemap };
     const smallScreen = window.matchMedia("(max-width: 480px)").matches;
     restoringPrefs = true;
     try {
@@ -1342,16 +1359,21 @@
       if (sidebarCollapsed) setupPanelCollapse._setSidebarCollapsed(true);
       if (listCollapsed)    setupPanelCollapse._setListCollapsed(true);
 
-      if (p.cluster) {
+      // Selection labels for a link restored in "show only selected" mode
+      if (state.showSelectedOnly && state.pointsLayer) {
+        state.pointsLayer.labelsVisible = true;
+      }
+
+      if (t.cluster) {
         document.getElementById("cluster-toggle").checked = true;
         setClusterEnabled(true);
       }
-      if (p.footprints) {
+      if (t.footprints) {
         document.getElementById("footprints-toggle").checked = true;
         // Lazy 7 MB fetch; on failure it toasts + rolls the switch back.
         setFootprintsVisible(true);
       }
-      if (p.threeD && state._activate3D) {
+      if (t.threeD && state._activate3D) {
         const sw = document.getElementById("threed-toggle");
         const status = document.getElementById("threed-status");
         sw.checked = true;
@@ -1359,13 +1381,21 @@
         try {
           await state._activate3D();
           status.textContent = "3D scene · right-drag to tilt, scroll to zoom";
+          // Shared 3D camera overrides the default oblique framing
+          if (u && u.cam) {
+            const [lon, lat, z, heading, tilt] = u.cam;
+            await state.view.goTo({
+              position: { longitude: lon, latitude: lat, z },
+              heading, tilt,
+            }, { animate: false }).catch(() => {});
+          }
         } catch (e) {
           console.warn("3D restore failed:", e);
           sw.checked = false;
           status.textContent = "2D flat map";
         }
       }
-      if (p.altBasemap && state.view) {
+      if (t.altBasemap && state.view) {
         state.view.map.basemap = state.view.type === "3d" ? "topo-vector" : "hybrid";
       }
     } finally {
@@ -1999,6 +2029,235 @@
     return clauses.join(" AND ");
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // Shareable view URLs — the full app state serializes into a versioned
+  // hash (#v=1&…) with short keys; defaults are omitted so an untouched
+  // app keeps a clean URL. A hash present at load wins over saved prefs.
+  // ─────────────────────────────────────────────────────────────────────
+  const URL_STAGE_CODE = {
+    "Planning/Design": "P",
+    "Implementation": "I",
+    "Post-Implementation": "O",
+    "Completed": "C",
+    [NONE]: "N",
+  };
+  const URL_SEL_CAP = 50;
+
+  function catCode(c) { return c === "Uncategorized" ? "UN" : c.slice(0, 2); }
+
+  function serializeStateToHash() {
+    const parts = [];
+    const add = (k, v) => parts.push(k + "=" + v);
+
+    const catPills = document.querySelectorAll("#category-filters .filter-pill").length;
+    if (state.activeCategories.size < catPills)
+      add("cat", Array.from(state.activeCategories).map(catCode).join(","));
+
+    const stgPills = document.querySelectorAll("#stage-filters .filter-pill").length;
+    if (state.activeStages.size < stgPills)
+      add("stg", Array.from(state.activeStages).map(s => URL_STAGE_CODE[s] || "N").join(","));
+
+    for (const [k, set] of [["prg", state.activePrograms],
+                            ["jur", state.activeJurisdictions],
+                            ["ws",  state.activeWatersheds]]) {
+      if (set.size) add(k, Array.from(set).map(encodeURIComponent).join("~"));
+    }
+
+    const fl = (state.flagEIP ? "e" : "") +
+               (state.flagTransportation ? "t" : "") +
+               (state.flagLakeClarity ? "l" : "");
+    if (fl) add("fl", fl);
+    if (state.searchTerm) add("q", encodeURIComponent(state.searchTerm));
+
+    if (state.selection.size) {
+      const ids = Array.from(state.selection).slice(0, URL_SEL_CAP);
+      add("sel", ids.map(encodeURIComponent).join(","));
+      if (state.showSelectedOnly) add("sso", "1");
+    }
+
+    if (document.getElementById("cluster-toggle").checked)    add("cl", "1");
+    if (document.getElementById("footprints-toggle").checked) add("fp", "1");
+
+    const view = state.view;
+    if (view) {
+      const def = view.type === "3d" ? "hybrid" : "gray-vector";
+      if (view.map.basemap && view.map.basemap.id !== def) add("bm", "1");
+      if (view.type === "3d") {
+        add("d3", "1");
+        const cam = view.camera;
+        if (cam && cam.position) {
+          add("cam", [
+            cam.position.longitude.toFixed(5), cam.position.latitude.toFixed(5),
+            Math.round(cam.position.z), Math.round(cam.heading), Math.round(cam.tilt),
+          ].join(","));
+        }
+      } else if (view.center) {
+        // Omit position while the view still frames the default basin
+        // extent — keeps the URL clean until the user actually moves.
+        const hf = state._homeFrame;
+        const lon = view.center.longitude, lat = view.center.latitude, z = view.zoom;
+        const isHome = hf &&
+          Math.abs(lon - hf.lon) < 5e-4 && Math.abs(lat - hf.lat) < 5e-4 &&
+          Math.abs(z - hf.zoom) < 0.05;
+        if (!isHome) {
+          add("c", lon.toFixed(5) + "," + lat.toFixed(5));
+          add("z", String(Math.round(z * 100) / 100));
+        }
+      }
+    }
+
+    return parts.length ? "v=1&" + parts.join("&") : "";
+  }
+
+  function parseHashState() {
+    const h = location.hash.replace(/^#/, "");
+    if (!h) return null;
+    let sp;
+    try { sp = new URLSearchParams(h); } catch { return null; }
+    if (sp.get("v") !== "1") return null;
+    const u = {};
+    // URLSearchParams already percent-decodes values — split only, don't
+    // decode again (a legit "%" in a name would get mangled).
+    if (sp.has("cat")) u.cat = sp.get("cat").split(",").filter(Boolean);
+    if (sp.has("stg")) u.stg = sp.get("stg").split(",").filter(Boolean);
+    if (sp.has("prg")) u.prg = sp.get("prg").split("~").filter(Boolean);
+    if (sp.has("jur")) u.jur = sp.get("jur").split("~").filter(Boolean);
+    if (sp.has("ws"))  u.ws  = sp.get("ws").split("~").filter(Boolean);
+    if (sp.has("fl"))  u.fl  = sp.get("fl");
+    if (sp.has("q"))   u.q   = sp.get("q");
+    if (sp.has("sel")) u.sel = sp.get("sel").split(",").filter(Boolean);
+    u.sso = sp.get("sso") === "1";
+    u.cl  = sp.get("cl")  === "1";
+    u.fp  = sp.get("fp")  === "1";
+    u.bm  = sp.get("bm")  === "1";
+    u.d3  = sp.get("d3")  === "1";
+    if (sp.has("c")) {
+      const c = sp.get("c").split(",").map(Number);
+      if (c.length === 2 && c.every(isFinite)) u.c = c;
+    }
+    if (sp.has("z")) {
+      const z = Number(sp.get("z"));
+      if (isFinite(z)) u.z = z;
+    }
+    if (sp.has("cam")) {
+      const cam = sp.get("cam").split(",").map(Number);
+      if (cam.length === 5 && cam.every(isFinite)) u.cam = cam;
+    }
+    return u;
+  }
+
+  // Apply the filter/selection portion of the parsed hash. Runs in init
+  // after the filter UIs are built but before buildMap — the view-level
+  // pieces (toggles, basemap, camera) are consumed later by applyPrefs
+  // and the MapView constructor.
+  function applyUrlState() {
+    const u = state._urlState;
+    if (!u) return;
+    state._restoringUrl = true;
+    try {
+      if (u.cat) {
+        state.activeCategories.clear();
+        document.querySelectorAll("#category-filters .filter-pill").forEach(btn => {
+          const on = u.cat.includes(catCode(btn.dataset.cat));
+          btn.classList.toggle("is-on", on);
+          btn.setAttribute("aria-pressed", on ? "true" : "false");
+          if (on) state.activeCategories.add(btn.dataset.cat);
+        });
+      }
+      if (u.stg) {
+        state.activeStages.clear();
+        document.querySelectorAll("#stage-filters .filter-pill").forEach(btn => {
+          const on = u.stg.includes(URL_STAGE_CODE[btn.dataset.stage] || "N");
+          btn.classList.toggle("is-on", on);
+          btn.setAttribute("aria-pressed", on ? "true" : "false");
+          if (on) state.activeStages.add(btn.dataset.stage);
+        });
+      }
+      for (const [vals, id, set] of [
+        [u.prg, "program-pills",      state.activePrograms],
+        [u.jur, "jurisdiction-pills", state.activeJurisdictions],
+        [u.ws,  "watershed-pills",    state.activeWatersheds],
+      ]) {
+        if (!vals) continue;
+        set.clear();
+        document.querySelectorAll(`#${id} .filter-pill`).forEach(btn => {
+          const on = vals.includes(btn.dataset.value);
+          btn.classList.toggle("is-on", on);
+          btn.setAttribute("aria-pressed", on ? "true" : "false");
+          if (on) set.add(btn.dataset.value);
+        });
+      }
+      if (u.fl) {
+        state.flagEIP            = u.fl.includes("e");
+        state.flagTransportation = u.fl.includes("t");
+        state.flagLakeClarity    = u.fl.includes("l");
+        document.querySelectorAll(".filter-pill[data-flag]").forEach(btn => {
+          const on = !!state[FLAG_STATE_KEY[btn.getAttribute("data-flag")]];
+          btn.classList.toggle("is-on", on);
+          btn.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+      }
+      if (u.q) {
+        document.getElementById("search-box").value = u.q;
+        state.searchTerm = u.q.trim().toLowerCase();
+      }
+      if (u.sel && u.sel.length) {
+        const known = new Set(state.allFeatures.map(f => f.properties.EIPProjectNumber));
+        let missed = 0;
+        for (const id of u.sel) {
+          if (known.has(id)) state.selection.add(id);
+          else missed++;
+        }
+        if (missed) {
+          console.warn(`Share link: ${missed} project id(s) not found in current data`);
+          toast(`${missed} project${missed === 1 ? "" : "s"} in this link no longer exist${missed === 1 ? "s" : ""}`);
+        }
+        if (u.sso && state.selection.size) {
+          state.showSelectedOnly = true;
+          const btn = document.getElementById("sel-show-only");
+          btn.classList.add("is-on");
+          btn.textContent = "Show all matches";
+          btn.setAttribute("aria-pressed", "true");
+        }
+      }
+    } finally {
+      state._restoringUrl = false;
+    }
+  }
+
+  function updateUrlDebounced() {
+    if (state._restoringUrl || !state.view) return;
+    clearTimeout(updateUrlDebounced._t);
+    updateUrlDebounced._t = setTimeout(() => {
+      const h = serializeStateToHash();
+      history.replaceState(null, "", location.pathname + location.search + (h ? "#" + h : ""));
+    }, 300);
+  }
+
+  function setupShareLink() {
+    document.getElementById("header-share").addEventListener("click", async () => {
+      const h = serializeStateToHash();
+      const url = location.origin + location.pathname + location.search + (h ? "#" + h : "");
+      const over = state.selection.size > URL_SEL_CAP
+        ? ` (first ${URL_SEL_CAP} of ${state.selection.size.toLocaleString()} selected)` : "";
+      try {
+        await navigator.clipboard.writeText(url);
+        toast("Link copied" + over);
+      } catch {
+        // Clipboard API unavailable (http, permissions) — legacy fallback
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        let ok = false;
+        try { ok = document.execCommand("copy"); } catch { /* ignore */ }
+        document.body.removeChild(ta);
+        toast(ok ? "Link copied" + over : "Couldn't copy the link", ok ? "info" : "error");
+      }
+    });
+  }
+
   function applyFilters() {
     const where = arcgisWhereClause();
     if (state.pointsLayerView) state.pointsLayerView.filter = { where };
@@ -2006,6 +2265,7 @@
     // updateFootprintsFilter() instead. We don't apply the broader
     // category/stage filter to it.
     renderList();
+    updateUrlDebounced();
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -2061,6 +2321,7 @@
       const eip = row.dataset.eip;
       row.classList.toggle("active", state.selection.has(eip));
     }
+    updateUrlDebounced();
   }
 
   // When the user has no explicit selection, include aspatial records
@@ -2367,6 +2628,7 @@
         // default would otherwise recreate the key right after resetApp
         // clears it.
         if (alt !== !!loadPrefs().altBasemap) savePref("altBasemap", alt);
+        updateUrlDebounced();
       });
 
       // Extent of the Tahoe Basin (covers Truckee → Meyers, west shore → Carson Valley fringe)
@@ -2377,11 +2639,27 @@
         spatialReference: { wkid: 4326 },
       };
 
+      const urlView = state._urlState;
       const mapView = new MapView({
         container: "map-view",
         map: map,
-        extent: BASIN_EXTENT,
         constraints: { minZoom: 7, maxZoom: 19 },
+        // A shared link's position wins over the default basin framing
+        ...(urlView && urlView.c
+          ? { center: urlView.c, zoom: urlView.z != null ? urlView.z : 11 }
+          : { extent: BASIN_EXTENT }),
+      });
+      // Capture the default framing so serializeStateToHash can keep the
+      // URL clean until the user actually moves the map. Skipped when the
+      // session opened from a shared position (that URL should keep c/z).
+      mapView.when(() => {
+        if (!state._homeFrame && !(urlView && urlView.c) && mapView.center) {
+          state._homeFrame = {
+            lon: mapView.center.longitude,
+            lat: mapView.center.latitude,
+            zoom: mapView.zoom,
+          };
+        }
       });
       // expose for resetApp's goTo target
       state._basinExtent = BASIN_EXTENT;
@@ -2595,6 +2873,7 @@
         xmax: geo.xmax, ymax: geo.ymax,
       };
       renderList();
+      updateUrlDebounced();
     });
   }
 
@@ -3238,6 +3517,7 @@
     sw.addEventListener("calciteSwitchChange", e => {
       setClusterEnabled(e.target.checked);
       savePref("cluster", e.target.checked);
+      updateUrlDebounced();
     });
   }
 
@@ -3257,6 +3537,7 @@
           ? "3D scene · right-drag to tilt, scroll to zoom"
           : "2D flat map";
         savePref("threeD", on);
+        updateUrlDebounced();
       } catch (err) {
         console.error(err);
         toast("Couldn't switch view", "error");
@@ -3313,7 +3594,18 @@
         }, { duration: 400 }).catch(() => {});
       } else {
         const target = state._basinExtent || { center: [-120.04, 39.09], zoom: 9 };
-        state.view.goTo(target, { duration: 400 }).catch(() => {});
+        state.view.goTo(target, { duration: 400 }).then(() => {
+          // Sessions opened from a shared link never captured the default
+          // framing — do it now so the reset URL stays clean.
+          if (!state._homeFrame && state.view.type === "2d" && state.view.center) {
+            state._homeFrame = {
+              lon: state.view.center.longitude,
+              lat: state.view.center.latitude,
+              zoom: state.view.zoom,
+            };
+          }
+          updateUrlDebounced();
+        }).catch(() => {});
       }
       // Basemap back to the per-view default (the 3D→2D switch above
       // already resets it synchronously when it runs)
@@ -3322,6 +3614,10 @@
     // Forget saved preferences last — the setters above re-save defaults
     // as they run, so the remove has to win.
     clearPrefs();
+    // Drop any shared-view hash immediately (the debounced serializer
+    // keeps it clean from here since everything is back to defaults)
+    state._urlState = null;
+    history.replaceState(null, "", location.pathname + location.search);
     toast("Reset to defaults");
   }
 
@@ -3330,6 +3626,7 @@
     sw.addEventListener("calciteSwitchChange", e => {
       setFootprintsVisible(e.target.checked);
       savePref("footprints", e.target.checked);
+      updateUrlDebounced();
     });
     // disable include-footprints checkbox until layer toggled on
     document.getElementById("include-footprints-row").setAttribute("disabled", "");
@@ -3357,6 +3654,10 @@
   // Init
   // ─────────────────────────────────────────────────────────────────────
   async function init() {
+    // Parse any shared-view hash before anything else — pieces of it are
+    // consumed at different points of startup (filters here, center/zoom
+    // in the MapView constructor, toggles in applyPrefs).
+    state._urlState = parseHashState();
     setStatus("snapshot", "Loading snapshot…");
     try {
       const [local, aspatial, detailedEips] = await Promise.all([
@@ -3402,7 +3703,9 @@
       setup3DToggle();
       setupPanelCollapse();
       setupFilterHints();
+      setupShareLink();
       setupProjectCardClose();
+      applyUrlState();
       buildMap(local);
       refreshSelectionUI();
 
