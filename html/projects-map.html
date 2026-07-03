@@ -1012,7 +1012,7 @@
     <!-- Map-area card — shown when user clicks a Class C (no-location)
          project in the list. Covers the map but leaves the side panels
          interactive. Body uses the same renderPopup() HTML as map popups. -->
-    <div id="project-card" class="project-card" hidden role="dialog" aria-modal="false" aria-labelledby="project-card-title">
+    <div id="project-card" class="project-card" hidden role="dialog" aria-modal="true" aria-labelledby="project-card-title">
       <div class="project-card-header">
         <div class="project-card-banner">
           <span class="project-card-banner-icon" aria-hidden="true">⊘</span>
@@ -2184,8 +2184,9 @@
         },
       });
 
+      state._pointsBlobUrl = fcToBlobUrl(initialFC);
       const layer = new GeoJSONLayer({
-        url: fcToBlobUrl(initialFC),
+        url: state._pointsBlobUrl,
         title: "EIP Projects (points)",
         renderer: buildPointsRenderer(),
         popupTemplate: buildPopupTemplate(),
@@ -2457,13 +2458,19 @@
 
   function reloadPointsData(newFC) {
     if (!state.pointsLayer) return;
-    state.pointsLayer.url = fcToBlobUrl(newFC);
+    // Revoke the previous blob URL AFTER pointing the layer at the new one —
+    // otherwise every reload leaks a full copy of the FeatureCollection.
+    const old = state._pointsBlobUrl;
+    state._pointsBlobUrl = fcToBlobUrl(newFC);
+    state.pointsLayer.url = state._pointsBlobUrl;
+    if (old) URL.revokeObjectURL(old);
   }
 
   function zoomToFeature(f) {
     if (!state.view) return;
     const [lon, lat] = f.geometry.coordinates;
-    state.view.goTo({ center: [lon, lat], zoom: 14 }, { duration: 400 });
+    // Rapid row clicks interrupt the previous animation → rejected promise
+    state.view.goTo({ center: [lon, lat], zoom: 14 }, { duration: 400 }).catch(() => {});
     require(["esri/Graphic"], Graphic => {
       const g = new Graphic({
         geometry: { type: "point", longitude: lon, latitude: lat },
@@ -2476,9 +2483,11 @@
   }
 
   // ─── Class C: open the map-area card with the rich popup HTML ───
+  let projectCardOpener = null;   // element to restore focus to on close
   function openProjectCard(props) {
     const card = document.getElementById("project-card");
     const body = document.getElementById("project-card-body");
+    projectCardOpener = document.activeElement;
     body.innerHTML = renderPopup(props);
     // Wire the show-more toggle inside the card body
     const toggle = body.querySelector(".pop-desc-toggle");
@@ -2493,10 +2502,16 @@
       });
     }
     card.hidden = false;
+    // aria-modal dialog: move focus in; closeProjectCard restores it
+    document.getElementById("project-card-close").focus();
   }
   function closeProjectCard() {
     const card = document.getElementById("project-card");
     if (card) card.hidden = true;
+    if (projectCardOpener && document.contains(projectCardOpener)) {
+      projectCardOpener.focus();
+    }
+    projectCardOpener = null;
   }
 
   // ─── Class B: add to selection (so the footprint actually renders
@@ -2573,7 +2588,10 @@
     const closeBtn = document.getElementById("project-card-close");
     if (closeBtn) closeBtn.addEventListener("click", closeProjectCard);
     document.addEventListener("keydown", e => {
-      if (e.key === "Escape") closeProjectCard();
+      // Only act when the card is open — otherwise Escape would steal
+      // focus back to a stale opener while e.g. closing the map popup.
+      const card = document.getElementById("project-card");
+      if (e.key === "Escape" && card && !card.hidden) closeProjectCard();
     });
   }
 
@@ -2584,6 +2602,19 @@
     if (state.detailedLoaded) return;
     document.getElementById("footprints-status").textContent =
       "Loading footprints…";
+    try {
+      await ensureDetailedLoadedInner();
+    } catch (e) {
+      // Leave detailedLoaded=false so toggling again retries the fetch.
+      console.error("Detailed footprints load failed:", e);
+      document.getElementById("footprints-status").textContent =
+        "Footprints failed to load — toggle to retry";
+      toast("Couldn't load detailed footprints — check your connection", "error");
+      throw e;   // caller (setFootprintsVisible) rolls the switch back
+    }
+  }
+
+  async function ensureDetailedLoadedInner() {
     const fc = await loadDetailed();
 
     // Enrich each detailed feature with Category derived from EIP # so
@@ -2609,8 +2640,9 @@
     const GeoJSONLayer = await new Promise(resolve =>
       require(["esri/layers/GeoJSONLayer"], resolve)
     );
+    state._detailedBlobUrl = fcToBlobUrl(fc);
     const layer = new GeoJSONLayer({
-      url: fcToBlobUrl(fc),
+      url: state._detailedBlobUrl,
       title: "EIP Projects (footprints)",
       renderer: buildDetailedRenderer(),
       popupTemplate: buildPopupTemplate(),
@@ -2681,8 +2713,8 @@
       try {
         await ensureDetailedLoaded();
       } catch (err) {
-        console.error(err);
-        toast("Couldn't load footprints — check your connection", "error");
+        // ensureDetailedLoaded already toasted + set the status text —
+        // just roll the switch back so the UI reflects reality.
         document.getElementById("footprints-toggle").checked = false;
         return;
       }
