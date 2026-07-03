@@ -223,26 +223,23 @@
       padding: 0.5rem 0.6rem 0.7rem;
     }
 
-    /* ── Statistics block (top of the list panel) ── */
-    #stats-block {
-      margin-top: 0.55rem;
-      --calcite-block-padding: 0;
-      --calcite-block-heading-text-color: var(--eip-navy);
-      --calcite-color-text-2: var(--eip-navy);
-    }
-    #stats-body { padding: 0.35rem 0.6rem 0.6rem; }
+    /* ── Stats strip (top of the list panel) — one line + a thin
+       focus-area mix bar; follows the active filters ── */
+    #stats-strip { margin-top: 0.45rem; }
     .stats-line {
-      font-size: 0.78rem;
+      font-size: 0.72rem;
       font-weight: 600;
       color: var(--eip-navy);
-      margin-bottom: 0.35rem;
     }
-    .stats-chart { width: 100%; }
-    .stats-foot {
-      font-size: 0.66rem;
-      color: #7a8390;
-      margin-top: 0.25rem;
+    .stats-bar {
+      display: flex;
+      height: 8px;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 0.3rem;
+      background: #eef1f4;
     }
+    .stats-bar span { display: block; height: 100%; }
 
     /* Watershed has 59 values — scroll inside the block + a small search */
     .pill-search {
@@ -295,6 +292,7 @@
     .filter-pill {
       --c: #7a8390;             /* swatch color (border, hover wash, on-bg) */
       --c-on-text: #FFFFFF;     /* text color when saturated (set per pill via JS) */
+      user-select: none;        /* double-click solos — don't select the label */
       display: inline-flex;
       align-items: center;
       gap: 0.4rem;
@@ -995,8 +993,9 @@
           </div>
           <calcite-tooltip id="tip-focus" placement="right-start">
             The EIP's four official focus areas, derived from each
-            project's EIP number. Click pills to show only those areas —
-            with none selected, everything shows.
+            project's EIP number. Click pills to toggle them;
+            double-click one to show only that area (double-click again
+            to bring the rest back).
           </calcite-tooltip>
           <div id="category-filters" class="filter-pills-grid"></div>
         </div>
@@ -1007,9 +1006,9 @@
               aria-label="About the Stage filter">?</span>
           </div>
           <calcite-tooltip id="tip-stage" placement="right-start">
-            Where each project is in its lifecycle — from proposed and
-            planning through construction to completed. Click pills to
-            filter; none selected shows all stages.
+            Where each project is in its lifecycle — from planning
+            through construction to completed. Click pills to toggle;
+            double-click one to show only that stage.
           </calcite-tooltip>
           <div id="stage-filters" class="filter-pills-grid"></div>
         </div>
@@ -1169,15 +1168,11 @@
         <div class="selection-bar" style="margin-top:0.3rem;">
           <span id="list-meta-text">—</span>
         </div>
-        <calcite-block id="stats-block" heading="Statistics" collapsible scale="s"
-          description="Charts for the projects matching current filters">
-          <div id="stats-body">
-            <div id="stats-line" class="stats-line">—</div>
-            <div id="stats-cat-chart" class="stats-chart"></div>
-            <div id="stats-stage-chart" class="stats-chart"></div>
-            <div class="stats-foot">Counts follow the active filters, not the map extent.</div>
-          </div>
-        </calcite-block>
+        <div id="stats-strip" title="Totals follow the active filters, not the map extent">
+          <div id="stats-line" class="stats-line">—</div>
+          <div id="stats-bar" class="stats-bar" role="img"
+            aria-label="Focus area mix of the filtered projects"></div>
+        </div>
       </div>
       <div id="list-scroll">
         <div class="empty-state" id="list-empty" hidden>
@@ -1822,7 +1817,7 @@
       btn.style.setProperty("--c", rgbaCss(dot));
       btn.style.setProperty("--c-on-text", readableTextOn(dot));
       btn.dataset.cat = c;
-      btn.title = `Toggle ${c} (${counts.get(c).toLocaleString()} projects)`;
+      btn.title = `Toggle ${c} (${counts.get(c).toLocaleString()} projects) — double-click to show only this`;
       btn.setAttribute("aria-pressed", "true");
       btn.innerHTML = `${escapeHtml(FOCUS_AREA_SHORT[c] || c)} <span class="count">${counts.get(c).toLocaleString()}</span>`;
       btn.addEventListener("click", () => {
@@ -1830,6 +1825,18 @@
         btn.setAttribute("aria-pressed", on ? "true" : "false");
         if (on) state.activeCategories.add(c);
         else    state.activeCategories.delete(c);
+        applyFilters();
+      });
+      // Double-click = solo this focus area; double-click again = all back on
+      btn.addEventListener("dblclick", () => {
+        const soloed = state.activeCategories.size === 1 && state.activeCategories.has(c);
+        state.activeCategories.clear();
+        container.querySelectorAll(".filter-pill").forEach(p => {
+          const on = soloed || p.dataset.cat === c;
+          p.classList.toggle("is-on", on);
+          p.setAttribute("aria-pressed", on ? "true" : "false");
+          if (on) state.activeCategories.add(p.dataset.cat);
+        });
         applyFilters();
       });
       container.appendChild(btn);
@@ -1869,7 +1876,7 @@
       btn.style.setProperty("--c", color);
       btn.style.setProperty("--c-on-text", readableTextOn(rgb));
       btn.dataset.stage = s;
-      btn.title = `Toggle ${display} (${counts.get(s).toLocaleString()} projects)`;
+      btn.title = `Toggle ${display} (${counts.get(s).toLocaleString()} projects) — double-click to show only this`;
       btn.setAttribute("aria-pressed", "true");
       btn.innerHTML = `${escapeHtml(display)} <span class="count">${counts.get(s).toLocaleString()}</span>`;
       btn.addEventListener("click", () => {
@@ -1877,6 +1884,18 @@
         btn.setAttribute("aria-pressed", on ? "true" : "false");
         if (on) state.activeStages.add(s);
         else    state.activeStages.delete(s);
+        applyFilters();
+      });
+      // Double-click = solo this stage; double-click again = all back on
+      btn.addEventListener("dblclick", () => {
+        const soloed = state.activeStages.size === 1 && state.activeStages.has(s);
+        state.activeStages.clear();
+        container.querySelectorAll(".filter-pill").forEach(p => {
+          const on = soloed || p.dataset.stage === s;
+          p.classList.toggle("is-on", on);
+          p.setAttribute("aria-pressed", on ? "true" : "false");
+          if (on) state.activeStages.add(p.dataset.stage);
+        });
         applyFilters();
       });
       container.appendChild(btn);
@@ -1936,7 +1955,7 @@
       btn.style.setProperty("--c", SECONDARY_PILL_COLOR);
       btn.style.setProperty("--c-on-text", "var(--white)");
       btn.dataset.value = val;
-      btn.title = `Toggle ${display} (${count.toLocaleString()} projects)`;
+      btn.title = `Toggle ${display} (${count.toLocaleString()} projects) — double-click to show only this`;
       btn.setAttribute("aria-pressed", "false");
       btn.innerHTML = `${escapeHtml(display)} <span class="count">${count.toLocaleString()}</span>`;
       btn.addEventListener("click", () => {
@@ -1944,6 +1963,19 @@
         btn.setAttribute("aria-pressed", on ? "true" : "false");
         if (on) activeSet.add(val);
         else    activeSet.delete(val);
+        applyFilters();
+      });
+      // Double-click = only this value; double-click again = clear the
+      // group (whitelist semantics: empty set = no constraint)
+      btn.addEventListener("dblclick", () => {
+        const soloed = activeSet.size === 1 && activeSet.has(val);
+        activeSet.clear();
+        container.querySelectorAll(".filter-pill").forEach(p => {
+          const on = !soloed && p.dataset.value === val;
+          p.classList.toggle("is-on", on);
+          p.setAttribute("aria-pressed", on ? "true" : "false");
+          if (on) activeSet.add(p.dataset.value);
+        });
         applyFilters();
       });
       container.appendChild(btn);
@@ -2386,7 +2418,8 @@
     // category/stage filter to it.
     renderList();
     updateUrlDebounced();
-    renderStats();
+    updateStatsStrip();
+    updateFilterBlockBadges();
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -3844,36 +3877,11 @@
   }
 
   // ─────────────────────────────────────────────────────────────────────
-  // Statistics panel — Plotly bars over the FILTERED set (not the map
-  // extent, so panning doesn't churn the charts). Plotly loads lazily on
-  // first expand through the same define-masking loader pattern as
-  // PptxGenJS/shp-write (plotly-basic is a plain global, but mask anyway).
+  // Stats strip — a one-line summary + thin focus-area mix bar over the
+  // FILTERED set (not the map extent, so panning doesn't churn it). The
+  // per-category/stage counts already live on the filter pills; the strip
+  // only adds what nothing else shows: totals and dollars.
   // ─────────────────────────────────────────────────────────────────────
-  let _plotlyLoadPromise = null;
-  function ensurePlotly() {
-    if (typeof window.Plotly !== "undefined") return Promise.resolve();
-    if (_plotlyLoadPromise) return _plotlyLoadPromise;
-    _plotlyLoadPromise = new Promise((resolve, reject) => {
-      const savedDefine = window.define;
-      window.define = undefined;
-      const s = document.createElement("script");
-      s.src = "https://cdn.plot.ly/plotly-basic-2.35.2.min.js";
-      s.onload = () => {
-        window.define = savedDefine;
-        if (typeof window.Plotly === "undefined")
-          reject(new Error("Plotly loaded but global is missing"));
-        else resolve();
-      };
-      s.onerror = () => {
-        window.define = savedDefine;
-        _plotlyLoadPromise = null;   // allow retry
-        reject(new Error("Plotly CDN load failed"));
-      };
-      document.head.appendChild(s);
-    });
-    return _plotlyLoadPromise;
-  }
-
   function computeStats() {
     const { filtered } = computeFilteredSets();
     const byCat = new Map(), byStage = new Map();
@@ -3891,77 +3899,46 @@
     return { n: filtered.length, mapped, byCat, byStage, cost, spent };
   }
 
-  let _statsOpen = false, _plotlyReady = false;
-
-  function renderStatsNow() {
-    if (!_statsOpen || !_plotlyReady || !window.Plotly) return;
+  function updateStatsStrip() {
     const s = computeStats();
     const bits = [`${s.n.toLocaleString()} projects (${s.mapped.toLocaleString()} mapped)`];
     const fc = formatCurrency(s.cost);
-    if (fc) bits.push(fc + " estimated cost");
+    if (fc) bits.push(fc + " est. cost");
     const fx = formatCurrency(s.spent);
-    if (fx) bits.push(fx + " spent to date");
+    if (fx) bits.push(fx + " spent");
     document.getElementById("stats-line").textContent = bits.join(" · ");
 
-    const layoutBase = {
-      margin: { l: 8, r: 16, t: 4, b: 20 },
-      font: { family: "Lexend Deca, sans-serif", size: 11, color: "#0B1F41" },
-      xaxis: { fixedrange: true, rangemode: "tozero" },
-      yaxis: { fixedrange: true, automargin: true },
-      paper_bgcolor: "rgba(0,0,0,0)",
-      plot_bgcolor: "rgba(0,0,0,0)",
-      bargap: 0.3,
-    };
-    const config = { displayModeBar: false, responsive: true };
-
-    // Categories — reversed so the first focus area renders on top
-    const cats = FOCUS_AREA_ORDER.filter(c => s.byCat.has(c)).reverse();
-    Plotly.react("stats-cat-chart", [{
-      type: "bar", orientation: "h",
-      y: cats.map(c => FOCUS_AREA_SHORT[c] || c),
-      x: cats.map(c => s.byCat.get(c)),
-      marker: { color: cats.map(c => rgbaCss(CATEGORY_COLOR[c] || [154, 163, 173, 0.85])) },
-      hovertemplate: "%{y}: %{x}<extra></extra>",
-    }], { ...layoutBase, height: 36 + cats.length * 34 }, config);
-
-    const stages = STAGE_ORDER.filter(st => s.byStage.has(st)).reverse();
-    Plotly.react("stats-stage-chart", [{
-      type: "bar", orientation: "h",
-      y: stages.map(st => st === NONE ? "Unspecified" : st),
-      x: stages.map(st => s.byStage.get(st)),
-      marker: { color: stages.map(st => STAGE_COLOR[st] || "#9aa3ad") },
-      hovertemplate: "%{y}: %{x}<extra></extra>",
-    }], { ...layoutBase, height: 36 + stages.length * 34 }, config);
+    const bar = document.getElementById("stats-bar");
+    bar.innerHTML = "";
+    if (!s.n) { bar.hidden = true; return; }
+    bar.hidden = false;
+    for (const c of FOCUS_AREA_ORDER) {
+      const count = s.byCat.get(c);
+      if (!count) continue;
+      const seg = document.createElement("span");
+      seg.style.width = (count / s.n * 100) + "%";
+      seg.style.background = rgbaCss(CATEGORY_COLOR[c] || [154, 163, 173, 0.85]);
+      seg.title = `${FOCUS_AREA_SHORT[c] || c} — ${count.toLocaleString()} project${count === 1 ? "" : "s"}`;
+      bar.appendChild(seg);
+    }
   }
 
-  function renderStats() {
-    clearTimeout(renderStats._t);
-    renderStats._t = setTimeout(renderStatsNow, 300);
-  }
-
-  function setupStatsBlock() {
-    const block = document.getElementById("stats-block");
-    const onToggle = async () => {
-      _statsOpen = !!block.open;
-      if (!_statsOpen) return;
-      if (!_plotlyReady) {
-        document.getElementById("stats-line").textContent = "Loading charts…";
-        try {
-          await ensurePlotly();
-          _plotlyReady = true;
-        } catch (e) {
-          console.error("Plotly load failed:", e);
-          document.getElementById("stats-line").textContent =
-            "Charts unavailable — check your connection and reopen";
-          return;
-        }
-      }
-      renderStatsNow();
-    };
-    // Calcite 5 block toggle event; older/newer names kept as belt and
-    // braces — onToggle is idempotent (reads block.open each time).
-    for (const ev of ["calciteBlockToggle", "calciteBlockOpen", "calciteBlockClose"])
-      block.addEventListener(ev, onToggle);
+  // Active-selection counts in the collapsible block headings — makes the
+  // sidebar state visible without expanding every block.
+  function updateFilterBlockBadges() {
+    const flagCount = (state.flagEIP ? 1 : 0) + (state.flagTransportation ? 1 : 0) +
+                      (state.flagLakeClarity ? 1 : 0);
+    const groups = [
+      ["project-type-block", "Project type",   flagCount],
+      ["program-block",      "Program",        state.activePrograms.size],
+      ["jurisdiction-block", "Jurisdiction",   state.activeJurisdictions.size],
+      ["watershed-block",    "Watershed",      state.activeWatersheds.size],
+      ["funding-block",      "Funding source", state.activeFundingSources.size],
+    ];
+    for (const [id, base, n] of groups) {
+      const block = document.getElementById(id);
+      if (block) block.heading = n ? `${base} (${n})` : base;
+    }
   }
 
   function setupFilterHints() {
@@ -4257,12 +4234,15 @@
       setup3DToggle();
       setupPanelCollapse();
       setupFilterHints();
-      setupStatsBlock();
       setupShareLink();
       setupProjectCardClose();
       applyUrlState();
       buildMap(local);
       refreshSelectionUI();
+      // Seed the stats strip + block badges now — applyFilters repeats
+      // this once the layer view resolves, but the data is ready here.
+      updateStatsStrip();
+      updateFilterBlockBadges();
 
       setStatus("snapshot", statusCountText());
     } catch (err) {
