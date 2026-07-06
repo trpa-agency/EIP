@@ -724,6 +724,28 @@
       opacity: 0.4;
       pointer-events: none;
     }
+    /* Locator-map button keeps hover so its title can explain the disabled
+       state (the click handler early-returns on an empty selection) */
+    #sel-to-locator[disabled] {
+      pointer-events: auto;
+      cursor: not-allowed;
+    }
+
+    /* Beta-feedback chip (shown only while FEEDBACK_URL is set) */
+    .beta-chip {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      border: 1.5px solid var(--eip-orange); border-radius: 999px;
+      padding: 0.15rem 0.3rem 0.15rem 0.65rem; margin-right: 0.3rem;
+    }
+    .beta-chip a {
+      font-size: 0.7rem; font-weight: 600; color: var(--white);
+      text-decoration: none; white-space: nowrap;
+    }
+    .beta-chip button {
+      border: none; background: none; cursor: pointer;
+      color: rgba(255,255,255,0.75); font-size: 0.8rem; line-height: 1; padding: 0 0.2rem;
+    }
+    .beta-chip button:hover { color: var(--white); }
     .pill-btn.is-on {
       background: var(--eip-orange);
       border-color: var(--eip-orange);
@@ -986,6 +1008,20 @@
       <span id="status-dot" class="live-dot snapshot"></span>
       <span id="status-text">Loading…</span>
     </div>
+    <span id="feedback-chip" class="beta-chip" hidden>
+      <a id="feedback-link" target="_blank" rel="noopener">Beta — feedback</a>
+      <button id="feedback-dismiss" type="button" title="Hide" aria-label="Hide feedback button">×</button>
+    </span>
+    <calcite-action
+      id="header-locator"
+      icon="pin-tear"
+      text="Open the Project Locator"
+      label="Open the Project Locator"
+      title="Project Locator — build branded slide maps of specific projects (opens in a new tab; sends your current selection if you have one)"
+      scale="s"
+      appearance="transparent"
+      style="--calcite-color-text-1: #fff; --calcite-color-text-3: #fff;"
+    ></calcite-action>
     <calcite-action
       id="header-share"
       icon="link"
@@ -1029,8 +1065,8 @@
           GeoJSON + Shapefile + CSV of the selection (or filtered set);
           <em>Map image</em> renders a branded 16:9 PNG or PowerPoint
           slide of the current view. <em>Locator map</em> in the
-          selection bar sends up to 9 picks to the Project Locator for
-          presentation maps.</li>
+          selection bar (also the pin button in the header) sends up to
+          9 picks to the Project Locator for presentation maps.</li>
         <li><strong>Share</strong> — the <calcite-icon icon="link" scale="s"
           style="vertical-align:-3px;"></calcite-icon> button in the header
           copies a link that reproduces your exact view: filters,
@@ -1443,6 +1479,11 @@
   // 2D/3D. Silently no-ops where localStorage is unavailable (private
   // browsing, blocked third-party storage).
   // ─────────────────────────────────────────────────────────────────────
+  // Beta user-testing feedback (Survey123). Set to the published form URL
+  // with ?field:toolname=projects-map to enable the header chip; blank it
+  // out to retire the affordance after the test window.
+  const FEEDBACK_URL = "";
+
   const PREFS_KEY = "eip-projects-map-prefs";
   let restoringPrefs = false;
 
@@ -2553,6 +2594,9 @@
     const toLocator = document.getElementById("sel-to-locator");
     toLocator.disabled = n === 0;
     toLocator.textContent = n ? `Locator map (${n.toLocaleString()})` : "Locator map";
+    toLocator.title = n
+      ? "Open the Project Locator with your selected projects to make a branded locator map (up to 9)"
+      : "Tick projects in the list (or Select visible) to enable — sends up to 9 selected projects to the Project Locator";
 
     // If we were showing-selected and selection is now empty, exit that mode
     if (n === 0 && state.showSelectedOnly) {
@@ -3932,9 +3976,10 @@
     document.getElementById("sel-clear").addEventListener("click", clearSelection);
 
     // Send the selection to the Project Locator (locator.html?eip=a,b,c).
-    // The locator places points only, and caps at 9 numbered pins.
+    // The locator places points only, and caps at 9 numbered pins. Shared
+    // by the selection-bar button and the header action.
     const LOCATOR_CAP = 9;
-    document.getElementById("sel-to-locator").addEventListener("click", () => {
+    function openLocatorWithSelection() {
       const ids = Array.from(state.selection);
       if (!ids.length) return;
       const spatial = new Set(state.allFeatures.map(f => f.properties.EIPProjectNumber));
@@ -3951,6 +3996,13 @@
       if (capped)  notes.push(`sending the first ${LOCATOR_CAP} of ${take.length + capped}`);
       if (notes.length) toast("Opening Project Locator — " + notes.join("; "));
       window.open("locator.html?eip=" + encodeURIComponent(take.join(",")), "_blank", "noopener");
+    }
+    document.getElementById("sel-to-locator").addEventListener("click", openLocatorWithSelection);
+    // Header action: carries the selection when there is one, otherwise
+    // just opens the locator fresh
+    document.getElementById("header-locator").addEventListener("click", () => {
+      if (state.selection.size) openLocatorWithSelection();
+      else window.open("locator.html", "_blank", "noopener");
     });
 
     const showOnly = document.getElementById("sel-show-only");
@@ -4114,6 +4166,20 @@
     }
     btn.addEventListener("click", () => setOpen(body.hidden));
     setupMoreFilters._setOpen = setOpen;
+  }
+
+  function setupFeedbackChip() {
+    const chip = document.getElementById("feedback-chip");
+    try {
+      if (FEEDBACK_URL && localStorage.getItem("eip-beta-feedback-hidden") !== "1") {
+        document.getElementById("feedback-link").href = FEEDBACK_URL;
+        chip.hidden = false;
+      }
+    } catch (e) { /* storage blocked — leave hidden */ }
+    document.getElementById("feedback-dismiss").addEventListener("click", () => {
+      chip.hidden = true;
+      try { localStorage.setItem("eip-beta-feedback-hidden", "1"); } catch (e) { /* ignore */ }
+    });
   }
 
   function setupInfoDialog() {
@@ -4425,6 +4491,7 @@
       setupPanelCollapse();
       setupFilterHints();
       setupInfoDialog();
+      setupFeedbackChip();
       setupShareLink();
       setupProjectCardClose();
       applyUrlState();

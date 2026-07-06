@@ -49,6 +49,12 @@
     .hdr-brand .hagency { font-size: 0.58rem; font-weight: 600; letter-spacing: 0.06em;
       text-transform: uppercase; color: var(--brand-primary); }
     .hdr-brand .hname { font-size: 0.95rem; font-weight: 700; color: var(--brand-dark); }
+    /* ← Tools back-link (white header — projects-map's navy version lives there) */
+    .hdr-back {
+      font-size: 0.72rem; font-weight: 600; color: #8A93A3; text-decoration: none;
+      border-left: 1px solid var(--gray-border); padding-left: 0.7rem; white-space: nowrap;
+    }
+    .hdr-back:hover { color: var(--brand-primary); }
 
     /* ── Body: side panel + map ── */
     #appBody { flex: 1 1 auto; display: flex; min-height: 0; }
@@ -165,6 +171,15 @@
     /* Header quick-links */
     .hdr-links { display: flex; align-items: center; gap: 0.15rem; }
 
+    /* Beta-feedback chip (shown only while FEEDBACK_URL is set) */
+    .beta-chip { display: inline-flex; align-items: center; gap: 0.3rem;
+      border: 1.5px solid var(--brand-accent); border-radius: 999px;
+      padding: 0.15rem 0.3rem 0.15rem 0.65rem; margin-right: 0.4rem; }
+    .beta-chip a { font-size: 0.7rem; font-weight: 600; color: var(--brand-accent);
+      text-decoration: none; white-space: nowrap; }
+    .beta-chip button { border: none; background: none; cursor: pointer; color: var(--brand-accent);
+      font-size: 0.8rem; line-height: 1; padding: 0 0.2rem; }
+
     /* Info modal content */
     .info-content { font-size: 0.88rem; line-height: 1.7; color: var(--brand-dark); }
     .info-content p { margin: 0 0 0.7rem; }
@@ -193,6 +208,7 @@
     @media (max-width: 760px) {
       .hdr-brand .hagency { display: none; }
       .hdr-brand img { height: 30px; }
+      .hdr-back { display: none; }     /* back-link hidden on small screens (mirrors projects-map) */
       .link-label { display: none; }   /* header links go icon-only on small screens */
       #appBody { flex-direction: column; }
       #sidePanel { flex: 0 0 auto; max-height: 45vh; border-right: none;
@@ -232,14 +248,19 @@
   <header id="appHeader">
     <div class="hdr-brand">
       <img id="brandLogo" src="assets/eip-logo.png" alt="Lake Tahoe EIP" />
+      <a href="index.html" class="hdr-back">← Tools</a>
       <div class="htitle">
         <span class="hagency" id="brandAgency">Environmental Improvement Program</span>
         <span class="hname">Project Locator</span>
       </div>
     </div>
     <div class="hdr-links">
+      <span id="feedbackChip" class="beta-chip" hidden>
+        <a id="feedbackLink" target="_blank" rel="noopener">Beta — feedback</a>
+        <button id="feedbackDismiss" type="button" title="Hide" aria-label="Hide feedback button">×</button>
+      </span>
       <!-- One related-map link at a time, matched to the active Style -->
-      <calcite-button id="projectsLink" href="https://trpa-agency.github.io/EIP/html/projects-map.html" target="_blank" rel="noopener"
+      <calcite-button id="projectsLink" href="projects-map.html" target="_blank" rel="noopener"
         icon-start="launch" appearance="transparent" kind="neutral" scale="s"
         title="Open the EIP Projects Map in a new window"><span class="link-label">EIP Projects Map</span></calcite-button>
       <calcite-button id="permitLink" href="https://gis.trpa.org/PermitReview/" target="_blank" rel="noopener" hidden
@@ -450,12 +471,18 @@
           puts the image on the clipboard to paste onto a slide. Toggle <em>Caption</em>
           for the styled text strip.</li>
       </ol>
-      <p class="info-fine">Parcel data: TRPA GIS · Home button returns to the Tahoe Basin.</p>
+      <p class="info-fine">Parcel data: TRPA GIS · Home button returns to the Tahoe Basin.
+        Browse and filter all EIP projects on the <strong>EIP Projects Map</strong>
+        (link in the header) — its <em>Locator map</em> button sends a selection here.</p>
     </div>
   </calcite-dialog>
 
   <script>
     // ───────────────────────── Config ─────────────────────────
+    // Beta user-testing feedback (Survey123). Set to the published form URL
+    // with ?field:toolname=locator to enable the header chip; blank it out
+    // to retire the affordance after the test window.
+    const FEEDBACK_URL = "";
     const SVC = "https://maps.trpa.org/server/rest/services/";
     const PARCELS_URL  = SVC + "Parcels/FeatureServer/0"; // FeatureServer returns geometry
     const BASIN = { center: [-120.04, 39.09], zoom: 9 };
@@ -872,6 +899,7 @@
         return;
       }
       let added = 0, missing = 0, over = 0;
+      const matched = [];   // every resolved EIP # (incl. dup/over-cap) — for the back-link
       for (const id of ids) {
         const digits = id.replace(/\D/g, "");
         const p = projectsCache.find(x => x.num === id) ||
@@ -879,11 +907,18 @@
             ? projectsCache.find(x => x.num.replace(/\D/g, "") === digits)
             : null);
         if (!p) { missing++; continue; }
+        matched.push(p.num);
         const loc = buildLoc({ kind: "project", p });
         if (!loc || locations.some(l => l.key === loc.key)) continue;
         if (locations.length >= MAX_LOCATIONS) { over++; continue; }
         locations.push(loc);
         added++;
+      }
+      // Round trip: the header "EIP Projects Map" link returns the user to
+      // the same selection (matches projects-map's #v=1&sel=… hash schema)
+      if (matched.length) {
+        $("projectsLink").href = "projects-map.html#v=1&sel=" +
+          matched.map(encodeURIComponent).join(",");
       }
       if (added) { refreshLocations(); zoomToLocations(); }
       const bits = [];
@@ -1512,6 +1547,18 @@
     document.querySelectorAll("calcite-tooltip[reference-element]").forEach(t => {
       const el = document.getElementById(t.getAttribute("reference-element"));
       if (el) t.referenceElement = el;
+    });
+
+    // ── Beta-feedback chip (Survey123) — shown while FEEDBACK_URL is set ──
+    try {
+      if (FEEDBACK_URL && localStorage.getItem("eip-beta-feedback-hidden") !== "1") {
+        $("feedbackLink").href = FEEDBACK_URL;
+        $("feedbackChip").hidden = false;
+      }
+    } catch (e) { /* storage blocked — leave hidden */ }
+    $("feedbackDismiss").addEventListener("click", () => {
+      $("feedbackChip").hidden = true;
+      try { localStorage.setItem("eip-beta-feedback-hidden", "1"); } catch (e) { /* ignore */ }
     });
 
     // ── Info dialog — on demand, plus auto-open on first visit ──
