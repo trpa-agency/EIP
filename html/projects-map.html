@@ -276,6 +276,45 @@
       padding: 0 0.25rem;
     }
 
+    /* "More filters" fold — same small-caps voice as the group label,
+       but interactive, with a chevron and an active-count badge */
+    .filter-group-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      width: 100%;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--eip-navy);
+      opacity: 0.65;
+      margin: 0.55rem 0 0.4rem;
+      padding: 0.2rem 0.25rem;
+    }
+    .filter-group-toggle:hover { opacity: 1; }
+    .mf-chev {
+      display: inline-block;
+      transition: transform 150ms ease-out;
+    }
+    .filter-group-toggle[aria-expanded="true"] .mf-chev { transform: rotate(90deg); }
+    .mf-badge {
+      background: var(--eip-blue);
+      color: var(--white);
+      border-radius: 999px;
+      font-size: 0.6rem;
+      line-height: 1;
+      padding: 0.18rem 0.45rem;
+    }
+
+    /* Faceted counts — pills that would yield nothing under the other
+       active filters fade back (still clickable) */
+    .filter-pill.is-zero { opacity: 0.4; }
+
     .section-label {
       font-size: 0.62rem;
       font-weight: 600;
@@ -1034,10 +1073,15 @@
           <div id="stage-filters" class="filter-pills-grid"></div>
         </div>
 
-        <div class="filter-group-label">More filters</div>
+        <button id="more-filters-toggle" class="filter-group-toggle" type="button"
+          aria-expanded="false" aria-controls="more-filters-body"
+          title="Program, jurisdiction, watershed, funding source, and project-type filters">
+          <span class="mf-chev" aria-hidden="true">▸</span> More filters
+          <span id="more-filters-badge" class="mf-badge" hidden></span>
+        </button>
+        <div id="more-filters-body" hidden>
 
-        <calcite-block heading="Project type" collapsible scale="s" id="project-type-block"
-          description="Cross-cutting flags — a project can carry several">
+        <calcite-block heading="Project type" collapsible scale="s" id="project-type-block">
           <div id="project-type-pills" class="filter-pills-grid">
             <button class="filter-pill" data-flag="IsEIPProject"
               style="--c: #5a6577; --c-on-text: var(--white);"
@@ -1051,18 +1095,15 @@
           </div>
         </calcite-block>
 
-        <calcite-block heading="Program" collapsible scale="s" id="program-block"
-          description="LakeTahoeInfo program the project reports under">
+        <calcite-block heading="Program" collapsible scale="s" id="program-block">
           <div id="program-pills" class="filter-pills-grid"></div>
         </calcite-block>
 
-        <calcite-block heading="Jurisdiction" collapsible scale="s" id="jurisdiction-block"
-          description="City or county where the project sits">
+        <calcite-block heading="Jurisdiction" collapsible scale="s" id="jurisdiction-block">
           <div id="jurisdiction-pills" class="filter-pills-grid"></div>
         </calcite-block>
 
-        <calcite-block heading="Watershed" collapsible scale="s" id="watershed-block"
-          description="Search and pick one or more watersheds">
+        <calcite-block heading="Watershed" collapsible scale="s" id="watershed-block">
           <input id="watershed-search" class="pill-search" type="text"
             placeholder="Search watersheds…" autocomplete="off"
             aria-label="Search watershed names" />
@@ -1071,8 +1112,7 @@
           </div>
         </calcite-block>
 
-        <calcite-block heading="Funding source" collapsible scale="s" id="funding-block"
-          description="Who has funded the work to date">
+        <calcite-block heading="Funding source" collapsible scale="s" id="funding-block">
           <input id="funding-search" class="pill-search" type="text"
             placeholder="Search funding sources…" autocomplete="off"
             aria-label="Search funding source names" />
@@ -1080,6 +1120,8 @@
             <div id="funding-pills" class="filter-pills-grid"></div>
           </div>
         </calcite-block>
+
+        </div><!-- /#more-filters-body -->
 
         <div class="reset-row">
           <button id="reset-filters" class="reset-pill" type="button"
@@ -1446,6 +1488,7 @@
       const listCollapsed    = p.list    !== undefined ? p.list    : smallScreen;
       if (sidebarCollapsed) setupPanelCollapse._setSidebarCollapsed(true);
       if (listCollapsed)    setupPanelCollapse._setListCollapsed(true);
+      if (p.moreFilters && setupMoreFilters._setOpen) setupMoreFilters._setOpen(true);
 
       // Selection labels for a link restored in "show only selected" mode
       if (state.showSelectedOnly && state.pointsLayer) {
@@ -1630,6 +1673,19 @@
           label: c,
           symbol: pointSymbol(CATEGORY_COLOR[c], 20),
         })),
+      // Scale-adaptive size — smaller at basin extent (658 pins overlap
+      // heavily at 20px), full pin size once zoomed to a community.
+      visualVariables: [{
+        type: "size",
+        valueExpression: "$view.scale",
+        stops: [
+          { value: 18000,   size: 28 },
+          { value: 70000,   size: 22 },
+          { value: 300000,  size: 16 },
+          { value: 1200000, size: 13 },
+        ],
+        legendOptions: { showLegend: false },
+      }],
     };
   }
 
@@ -1739,6 +1795,10 @@
     if (tl) facts.push(["Timeline", escapeHtmlPopup(tl)]);
     const cost = formatCurrency(attrs.EstimatedTotalCost);
     if (cost) facts.push(["Est. cost", `<span class="cost">${cost}</span>`]);
+    const spent = formatCurrency(attrs.TotalExpenditure);
+    if (spent) facts.push(["Spent to date", `<span class="cost">${spent}</span>`]);
+    if (attrs.FundingSources)
+      facts.push(["Funding", escapeHtmlPopup(attrs.FundingSources)]);
     if (attrs.ProjectThresholdCategories)
       facts.push(["Threshold category", escapeHtmlPopup(attrs.ProjectThresholdCategories)]);
     if (attrs.EIPActionPriority)
@@ -2114,18 +2174,21 @@
   // ─────────────────────────────────────────────────────────────────────
   // Filtering
   // ─────────────────────────────────────────────────────────────────────
-  function passesFiltersOnProps(p) {
+  // `skip` names one dimension ("cat"/"stage"/"prg"/"jur"/"ws"/"fs") to
+  // leave unchecked — used by the faceted pill counts, which show what
+  // each pill would yield under all the OTHER active filters.
+  function passesFiltersOnProps(p, skip) {
     // Focus Area (checkbox semantics — must be in active set)
     const cat = p.Category || "Uncategorized";
-    if (!state.activeCategories.has(cat)) return false;
+    if (skip !== "cat" && !state.activeCategories.has(cat)) return false;
     // Stage (checkbox semantics)
-    if (!state.activeStages.has(dimVal(p.Stage))) return false;
+    if (skip !== "stage" && !state.activeStages.has(dimVal(p.Stage))) return false;
     // Program / Jurisdiction / Watershed (combobox semantics — empty = no filter)
-    if (state.activePrograms.size && !state.activePrograms.has(dimVal(p.EIPProgram))) return false;
-    if (state.activeJurisdictions.size && !state.activeJurisdictions.has(dimVal(p.ProjectJurisdiction))) return false;
-    if (state.activeWatersheds.size && !state.activeWatersheds.has(dimVal(p.ProjectWatershed))) return false;
+    if (skip !== "prg" && state.activePrograms.size && !state.activePrograms.has(dimVal(p.EIPProgram))) return false;
+    if (skip !== "jur" && state.activeJurisdictions.size && !state.activeJurisdictions.has(dimVal(p.ProjectJurisdiction))) return false;
+    if (skip !== "ws" && state.activeWatersheds.size && !state.activeWatersheds.has(dimVal(p.ProjectWatershed))) return false;
     // Funding sources (multi-value "; "-joined; NONE matches unfunded/unknown)
-    if (state.activeFundingSources.size) {
+    if (skip !== "fs" && state.activeFundingSources.size) {
       const vals = p.FundingSources ? String(p.FundingSources).split("; ") : [NONE];
       if (!vals.some(v => state.activeFundingSources.has(v))) return false;
     }
@@ -2398,6 +2461,11 @@
           btn.setAttribute("aria-pressed", "true");
         }
       }
+      // A shared link with secondary filters active — unfold the group so
+      // the recipient can see what's filtering
+      if ((u.prg || u.jur || u.ws || u.fs || u.fl) && setupMoreFilters._setOpen) {
+        setupMoreFilters._setOpen(true);
+      }
     } finally {
       state._restoringUrl = false;
     }
@@ -2446,6 +2514,7 @@
     updateUrlDebounced();
     updateStatsStrip();
     updateFilterBlockBadges();
+    updatePillCounts();
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -3949,6 +4018,57 @@
     }
   }
 
+  // Faceted pill counts — each pill shows how many records it would
+  // yield under all the OTHER active filters (and the search term), the
+  // way store-style filters behave. Zero-yield pills fade back. Counts
+  // cover the same population as the list and stats: spatial + basin-wide.
+  function updatePillCounts() {
+    const records = [
+      ...state.allFeatures.map(f => f.properties),
+      ...state.aspatialRecords,
+    ];
+    // [container, skip-dimension, value(s)-of-record, pill dataset key]
+    const dims = [
+      ["category-filters",   "cat",   p => p.Category || "Uncategorized",      "cat"],
+      ["stage-filters",      "stage", p => dimVal(p.Stage),                    "stage"],
+      ["program-pills",      "prg",   p => dimVal(p.EIPProgram),               "value"],
+      ["jurisdiction-pills", "jur",   p => dimVal(p.ProjectJurisdiction),      "value"],
+      ["watershed-pills",    "ws",    p => dimVal(p.ProjectWatershed),         "value"],
+      ["funding-pills",      "fs",
+        p => p.FundingSources ? String(p.FundingSources).split("; ") : [NONE], "value"],
+    ];
+    for (const [containerId, skip, valueOf, key] of dims) {
+      const counts = new Map();
+      for (const p of records) {
+        if (!passesFiltersOnProps(p, skip)) continue;
+        const v = valueOf(p);
+        for (const one of (Array.isArray(v) ? v : [v]))
+          counts.set(one, (counts.get(one) || 0) + 1);
+      }
+      document.querySelectorAll(`#${containerId} .filter-pill`).forEach(pill => {
+        const n = counts.get(pill.dataset[key]) || 0;
+        const span = pill.querySelector(".count");
+        if (span) span.textContent = n.toLocaleString();
+        pill.classList.toggle("is-zero", n === 0);
+      });
+    }
+  }
+
+  // One non-default "group" = one unit in the Reset count (a whole pill
+  // family, the flags, or the search box — not individual values).
+  function activeFilterGroupCount() {
+    let n = 0;
+    if (state.activeCategories.size < document.querySelectorAll("#category-filters .filter-pill").length) n++;
+    if (state.activeStages.size < document.querySelectorAll("#stage-filters .filter-pill").length) n++;
+    if (state.activePrograms.size) n++;
+    if (state.activeJurisdictions.size) n++;
+    if (state.activeWatersheds.size) n++;
+    if (state.activeFundingSources.size) n++;
+    if (state.flagEIP || state.flagTransportation || state.flagLakeClarity) n++;
+    if (state.searchTerm) n++;
+    return n;
+  }
+
   // Active-selection counts in the collapsible block headings — makes the
   // sidebar state visible without expanding every block.
   function updateFilterBlockBadges() {
@@ -3965,6 +4085,35 @@
       const block = document.getElementById(id);
       if (block) block.heading = n ? `${base} (${n})` : base;
     }
+
+    // "More filters" badge — total active values across the folded groups
+    const mfTotal = flagCount + state.activePrograms.size +
+      state.activeJurisdictions.size + state.activeWatersheds.size +
+      state.activeFundingSources.size;
+    const badge = document.getElementById("more-filters-badge");
+    badge.textContent = String(mfTotal);
+    badge.hidden = mfTotal === 0;
+
+    // Reset button appears only when something is non-default, and says
+    // how many filter groups it will clear
+    const groupsActive = activeFilterGroupCount();
+    document.querySelector(".reset-row").hidden = groupsActive === 0;
+    if (groupsActive) {
+      document.getElementById("reset-filters").innerHTML =
+        `<span class="reset-icon" aria-hidden="true">↺</span> Reset filters (${groupsActive})`;
+    }
+  }
+
+  function setupMoreFilters() {
+    const btn = document.getElementById("more-filters-toggle");
+    const body = document.getElementById("more-filters-body");
+    function setOpen(open) {
+      body.hidden = !open;
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      savePref("moreFilters", open);
+    }
+    btn.addEventListener("click", () => setOpen(body.hidden));
+    setupMoreFilters._setOpen = setOpen;
   }
 
   function setupInfoDialog() {
@@ -4148,9 +4297,10 @@
       document.getElementById("threed-status").textContent = "2D flat map";
       if (state._activate2D) state._activate2D();
     }
-    // Reopen both panels if hidden
+    // Reopen both panels if hidden; fold More filters back up
     if (setupPanelCollapse._setListCollapsed)    setupPanelCollapse._setListCollapsed(false);
     if (setupPanelCollapse._setSidebarCollapsed) setupPanelCollapse._setSidebarCollapsed(false);
+    if (setupMoreFilters._setOpen) setupMoreFilters._setOpen(false);
     // Recenter the map and close any popup
     if (state.view) {
       state.view.closePopup();
@@ -4263,6 +4413,7 @@
       buildStageFilters();
       buildAttributeComboboxes();
       setupFlagPills();
+      setupMoreFilters();
       setupResetButton();
       setupSearch();
       setupSelectionButtons();
@@ -4279,10 +4430,12 @@
       applyUrlState();
       buildMap(local);
       refreshSelectionUI();
-      // Seed the stats strip + block badges now — applyFilters repeats
-      // this once the layer view resolves, but the data is ready here.
+      // Seed the stats strip, badges, and faceted counts now —
+      // applyFilters repeats this once the layer view resolves, but the
+      // data is ready here.
       updateStatsStrip();
       updateFilterBlockBadges();
+      updatePillCounts();
 
       setStatus("snapshot", statusCountText());
     } catch (err) {
