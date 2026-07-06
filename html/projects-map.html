@@ -2556,6 +2556,8 @@
     updateStatsStrip();
     updateFilterBlockBadges();
     updatePillCounts();
+    // Footprints follow the filters when no selection scopes them
+    if (state.detailedLoaded) updateFootprintsFilter();
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -2854,7 +2856,25 @@
       "esri/widgets/Fullscreen",
       "esri/widgets/BasemapToggle",
       "esri/core/reactiveUtils",
-    ], (Map, MapView, SceneView, GeoJSONLayer, FeatureLayer, Home, ScaleBar, Legend, Expand, Fullscreen, BasemapToggle, reactiveUtils) => {
+      "esri/Basemap",
+    ], (Map, MapView, SceneView, GeoJSONLayer, FeatureLayer, Home, ScaleBar, Legend, Expand, Fullscreen, BasemapToggle, reactiveUtils, Basemap) => {
+
+      // Basemaps: Esri Firefly Imagery Hybrid (default) ⇄ Human Geography
+      // (alternate) — same portal items the Project Locator uses. Explicit
+      // ids so prefs / share-links can tell default from alternate.
+      const PORTAL_BM = {
+        firefly:  "9e557abc61ce41c9b8ec8b15800c20d3",   // "Imagery + Labels"
+        humangeo: "3582b744bba84668b52a16b0b6942544",
+      };
+      const BM_CACHE = {};
+      function makeBasemap(key) {
+        if (!BM_CACHE[key]) {
+          BM_CACHE[key] = new Basemap({ portalItem: { id: PORTAL_BM[key] } });
+          BM_CACHE[key].id = key;
+        }
+        return BM_CACHE[key];
+      }
+      state._makeBasemap = makeBasemap;
 
       // Exposed for the branded map export's event-driven settle wait
       state._reactiveUtils = reactiveUtils;
@@ -2921,16 +2941,33 @@
       state.boundaryLayer = boundary;
 
       const map = new Map({
-        basemap: "gray-vector",                // Esri Light Gray Canvas (free, anonymous)
+        basemap: makeBasemap("firefly"),       // Firefly Imagery Hybrid (default)
         ground: "world-elevation",             // 3D terrain — only rendered by SceneView
         layers: [boundary, layer],
       });
+
+      // Basemap reference layers (place/road labels on hybrid, imagery,
+      // and gray-vector) render ABOVE operational layers by design —
+      // demote them into the base layers so project pins and footprints
+      // always draw on top of the labels.
+      async function demoteReferenceLayers(bm) {
+        if (!bm) return;
+        try {
+          await bm.load();
+          if (bm.referenceLayers.length) {
+            bm.baseLayers.addMany(bm.referenceLayers.toArray());
+            bm.referenceLayers.removeAll();
+          }
+        } catch (e) { console.warn("Basemap label demotion skipped:", e); }
+      }
+      demoteReferenceLayers(map.basemap);
 
       // Persist whether the user is on the non-default basemap for the
       // current view type (2D: gray-vector→hybrid, 3D: hybrid→topo-vector).
       // activateView resets the basemap on 2D⇄3D switch, so the saved flag
       // always mirrors what's actually on screen.
       map.watch("basemap", bm => {
+        demoteReferenceLayers(bm);
         const def = state.view && state.view.type === "3d" ? "hybrid" : "gray-vector";
         const alt = !!bm && bm.id !== def;
         // Only write on change — the watch fires async, and an unchanged
@@ -3029,12 +3066,11 @@
         view.ui.add(scale, "bottom-left");
         view._eipWidgets.push(scale);
 
-        // Basemap toggle — alternates between the per-view default basemap
-        // and its complement (so 2D gray ⇄ hybrid, 3D hybrid ⇄ topo).
-        const altBasemap = view.type === "3d" ? "topo-vector" : "hybrid";
+        // Basemap toggle — Firefly imagery (default) ⇄ Human Geography.
+        // Same pair in 2D and 3D (both drape fine over the elevation).
         const basemapToggle = new BasemapToggle({
           view,
-          nextBasemap: altBasemap,
+          nextBasemap: makeBasemap("humangeo"),
         });
         view.ui.add(basemapToggle, "bottom-right");
         view._eipWidgets.push(basemapToggle);
@@ -3401,10 +3437,25 @@
   // show-everything behavior.
   function updateFootprintsFilter() {
     if (!state.detailedLayerView) return;
-    const ids = Array.from(state.selection);
-    const where = ids.length
-      ? `EIPProjectNumber IN (${ids.map(id => `'${escSql(id)}'`).join(",")})`
-      : "1=0";
+    let where;
+    if (state.selection.size) {
+      // A selection scopes the footprints to exactly those projects
+      const ids = Array.from(state.selection);
+      where = `EIPProjectNumber IN (${ids.map(id => `'${escSql(id)}'`).join(",")})`;
+      state._fpCount = ids.filter(id => state.detailedEips.has(id)).length;
+    } else {
+      // No selection → footprints follow the active filters, same
+      // population as the list (spatial + basin-wide — Class B projects
+      // have footprints but no point). The old behavior ("1=0" until you
+      // selected something) predates the per-project dissolve; at 609
+      // features the full set renders fine.
+      const all = state.allFeatures.map(f => f.properties).concat(state.aspatialRecords);
+      const passing = all.filter(p => passesFiltersOnProps(p));
+      state._fpCount = passing.filter(p => state.detailedEips.has(p.EIPProjectNumber)).length;
+      if (passing.length === all.length)      where = "1=1";
+      else if (!passing.length)               where = "1=0";
+      else where = `EIPProjectNumber IN (${passing.map(p => `'${escSql(p.EIPProjectNumber)}'`).join(",")})`;
+    }
     state.detailedLayerView.filter = { where };
     updateFootprintsStatus();
   }
@@ -3415,12 +3466,17 @@
     const sw = document.getElementById("footprints-toggle");
     const on = sw && sw.checked;
     const n = state.selection.size;
+    const fp = state._fpCount || 0;
     if (!on) {
       status.textContent = "Detailed geometry hidden";
     } else if (n === 0) {
-      status.textContent = "On — pick projects to show their geometry";
+      status.textContent = fp
+        ? `Showing footprints for ${fp.toLocaleString()} filtered project${fp === 1 ? "" : "s"}`
+        : "No filtered projects have detailed geometry";
     } else {
-      status.textContent = `Showing detailed geometry for ${n.toLocaleString()} selected project${n === 1 ? "" : "s"}`;
+      status.textContent = fp
+        ? `Showing footprints for ${fp.toLocaleString()} of ${n.toLocaleString()} selected`
+        : "None of the selected projects have detailed geometry";
     }
   }
 

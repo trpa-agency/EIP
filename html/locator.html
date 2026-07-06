@@ -366,6 +366,8 @@
             <div class="seg seg-fill" id="formatSeg" role="radiogroup" aria-label="Export format">
               <button data-value="png" class="active" role="radio" aria-checked="true">PNG</button>
               <button data-value="pptx" role="radio" aria-checked="false">PPTX</button>
+              <button data-value="svg" role="radio" aria-checked="false"
+                title="Vector graphic — pins, text, and shapes stay editable in Illustrator, Inkscape, or Affinity; modern PowerPoint can convert it to shapes">SVG</button>
             </div>
           </label>
           <label class="cap-toggle" title="Include the styled caption strip in the export">
@@ -1481,6 +1483,185 @@
       });
     }
 
+    // ── SVG export — true vector composition ──
+    // Pins, north arrow, text, and shapes are real SVG elements (fully
+    // editable in Illustrator / Inkscape / Affinity; modern PowerPoint can
+    // insert the file and convert it to shapes). The map panels embed as
+    // raster images — they're WebGL renders. Geometry mirrors the canvas
+    // compose* functions 1:1; text declares the brand font by name (no
+    // embedding — the editor substitutes when it isn't installed).
+    const PIN_PATH = "M13 1 C6 1 1 5.5 1 12 C1 21 13 35 13 35 C13 35 25 21 25 12 C25 5.5 20 1 13 1 Z";
+
+    function svgPin(tipX, tipY, h, hex, num) {
+      const s = h / 34;
+      const head = num != null
+        ? `<text x="13" y="12.5" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="700" fill="#FFFFFF">${num}</text>`
+        : `<circle cx="13" cy="12" r="4.5" fill="#FFFFFF"/>`;
+      return `<g transform="translate(${(tipX - 13*s).toFixed(1)} ${(tipY - 35*s).toFixed(1)}) scale(${s.toFixed(3)})">` +
+        `<path d="${PIN_PATH}" fill="${hex}" stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round"/>${head}</g>`;
+    }
+    function svgNorthArrow(cx, cy, size, hexColor) {
+      return `<g transform="translate(${cx} ${cy})"><circle r="${(size*0.46).toFixed(1)}" fill="#FFFFFF" fill-opacity="0.92"/>` +
+        `<g transform="translate(${-size/2} ${-size/2}) scale(${(size/32).toFixed(3)})"><path d="${NORTH_PATH}" fill="${hexColor}"/></g></g>`;
+    }
+    function svgText(x, y, text, { size, weight = 400, fill, middle = false } = {}) {
+      return `<text x="${Math.round(x)}" y="${Math.round(y)}" font-size="${Math.round(size)}" font-weight="${weight}" fill="${fill}"` +
+        `${middle ? ` dominant-baseline="central"` : ""}>${escHtml(text)}</text>`;
+    }
+    const svgImage = (src, x, y, w, h) =>
+      `<image href="${src}" x="${Math.round(x)}" y="${Math.round(y)}" width="${Math.round(w)}" height="${Math.round(h)}" preserveAspectRatio="none"/>`;
+    const svgRect = (x, y, w, h, fill, extra = "") =>
+      `<rect x="${Math.round(x)}" y="${Math.round(y)}" width="${Math.round(w)}" height="${Math.round(h)}" fill="${fill}" ${extra}/>`;
+    const svgFillA = (a) => `fill="rgb(${a[0]},${a[1]},${a[2]})" fill-opacity="${a[3]}"`;
+
+    async function buildSvg() {
+      if (document.fonts) { const fam = pptFont();
+        await Promise.all([400,600,700].map(w => document.fonts.load(`${w} 40px '${fam}'`))).catch(()=>{}); }
+      const caption = $("capSwitch").checked;
+      const b = brand();
+      const parts = [];
+      let W, H;
+      // Ellipsize with the same canvas metrics the PNG path uses
+      const mctx = document.createElement("canvas").getContext("2d");
+      const ell = (text, weight, size, maxW) => {
+        mctx.font = `${weight} ${size}px ${baseFont()}`;
+        return ellipsize(mctx, text, maxW);
+      };
+
+      if (exportLayout === "slide") {
+        ({ W, H } = EXPORT.slide);
+        const { margin: M, pinH, arrow } = EXPORT.slide;
+        const mp = { x: W - M - 960, y: M, w: 960, h: H - 2*M };
+        const { img, pins } = await shotBasin(Math.round(mp.w*0.72), Math.round(mp.h*0.72));
+        parts.push(svgRect(0, 0, W, H, "#FFFFFF"));
+        parts.push(`<rect x="${mp.x}" y="${mp.y}" width="${mp.w}" height="${mp.h}" ${svgFillA(BASIN_STYLE.outside)}/>`);
+        if (img) parts.push(svgImage(img.src, mp.x, mp.y, mp.w, mp.h));
+        pins.forEach(p => parts.push(svgPin(mp.x + p.nx*mp.w, mp.y + p.ny*mp.h, pinH, b.pin, p.num)));
+        parts.push(svgNorthArrow(mp.x + mp.w - 64, mp.y + mp.h - 64, arrow, b.dark));
+        const logo = await getLogo();
+        if (logo) {
+          const lh = b.slideLogoH || 130;
+          parts.push(svgImage(logo.src, 150, 130, lh * logo.width / logo.height, lh));
+        }
+        const colW = mp.x - 150 - 40;
+        if (caption && locations.length === 1) {
+          parts.push(svgText(150, 640, ell(loc0().label, 700, 92, colW), { size: 92, weight: 700, fill: b.dark }));
+          parts.push(svgText(150, 710, ell(loc0().sub, 400, 46, colW), { size: 46, fill: "#6B7688" }));
+        } else if (caption && locations.length > 1) {
+          parts.push(svgText(150, 560, `${locations.length} Project Locations`, { size: 92, weight: 700, fill: b.dark }));
+          const MAX_LINES = 8; let ly = 640;
+          locations.slice(0, MAX_LINES).forEach((l, i) => {
+            parts.push(svgText(150, ly,
+              ell(`${i+1}.  ${l.label}${l.short !== l.label ? " — " + l.short : ""}`, 600, 40, colW),
+              { size: 40, weight: 600, fill: b.dark }));
+            ly += 58;
+          });
+          if (locations.length > MAX_LINES)
+            parts.push(svgText(150, ly, `+${locations.length - MAX_LINES} more`, { size: 40, fill: "#6B7688" }));
+        }
+        parts.push(svgRect(150, mp.y + mp.h - 6, mp.x + mp.w - 150, 6, b.primary));
+
+      } else if (exportLayout === "split") {
+        ({ W, H } = EXPORT.split);
+        const { capFrac, pinHZoom, pinHBasin, arrow } = EXPORT.split;
+        const capH = caption ? Math.round(H*capFrac) : 0, mapH = H - capH;
+        const leftW = Math.round(W*2/3), rightW = W - leftW;
+        const [zoom, basin] = await Promise.all([
+          shotZoom(leftW/mapH), shotBasin(Math.round(rightW*0.6), Math.round(mapH*0.6)) ]);
+        parts.push(svgRect(0, 0, W, H, "#FFFFFF"));
+        if (zoom.img) parts.push(svgImage(zoom.img.src, 0, 0, leftW, mapH));
+        zoom.pins.forEach(p => parts.push(svgPin(p.nx*leftW, p.ny*mapH, pinHZoom, b.pin, p.num)));
+        parts.push(`<rect x="${leftW}" y="0" width="${rightW}" height="${mapH}" ${svgFillA(BASIN_STYLE.outside)}/>`);
+        if (basin.img) parts.push(svgImage(basin.img.src, leftW, 0, rightW, mapH));
+        basin.pins.forEach(p => parts.push(svgPin(leftW + p.nx*rightW, p.ny*mapH, pinHBasin, b.pin, p.num)));
+        parts.push(svgRect(leftW - 2, 0, 4, mapH, "#FFFFFF", 'fill-opacity="0.9"'));
+        parts.push(svgNorthArrow(W - 64, mapH - 64, arrow, b.dark));
+        const L = locationCardLayout(1.15);
+        if (L) {
+          const cx = 44, cy = mapH - 44 - L.h;
+          parts.push(`<rect x="${cx}" y="${Math.round(cy)}" width="${Math.round(L.w)}" height="${Math.round(L.h)}" rx="${(14*1.15).toFixed(1)}" fill="#FFFFFF" filter="url(#cardShadow)"/>`);
+          parts.push(svgRect(cx, cy, L.bar, L.h, b.accent, `rx="${(4*1.15).toFixed(1)}"`));
+          const tx = cx + L.bar + L.pad;
+          let yy = cy + L.pad + L.fsL*0.85;
+          parts.push(svgText(tx, yy, L.single ? "LOCATION" : "LOCATIONS", { size: L.fsL, weight: 700, fill: b.accent }));
+          if (L.single) {
+            yy += L.fsA*1.02;
+            parts.push(svgText(tx, yy, L.rows[0].bold, { size: L.fsA, weight: 700, fill: b.dark }));
+            yy += L.fsM*1.3;
+            parts.push(svgText(tx, yy, L.rows[1].gray, { size: L.fsM, fill: "#6B7688" }));
+          } else {
+            for (const r of L.rows) {
+              yy += L.rowH;
+              if (r.bold) {
+                mctx.font = `700 ${L.fsM*1.15}px ${baseFont()}`;
+                const bw = mctx.measureText(r.bold).width;
+                parts.push(svgText(tx, yy, r.bold, { size: L.fsM*1.15, weight: 700, fill: b.dark }));
+                if (r.grayAppend)
+                  parts.push(svgText(tx + bw, yy, r.grayAppend, { size: L.fsM, fill: "#6B7688" }));
+              } else if (r.gray) {
+                parts.push(svgText(tx, yy, r.gray, { size: L.fsM, fill: "#6B7688" }));
+              }
+            }
+          }
+        }
+        if (caption) parts.push(await svgCaption(0, mapH, W, capH, false));
+
+      } else {
+        ({ W, H } = EXPORT.locator);
+        const { capFrac, pinH, arrow } = EXPORT.locator;
+        const capH = caption ? Math.round(H*capFrac) : 0, mapH = H - capH;
+        const { img, pins } = await shotBasin(850, Math.round(850 * mapH / W));
+        parts.push(`<rect x="0" y="0" width="${W}" height="${H}" ${svgFillA(BASIN_STYLE.outside)}/>`);
+        if (img) parts.push(svgImage(img.src, 0, 0, W, mapH));
+        pins.forEach(p => parts.push(svgPin(p.nx*W, p.ny*mapH, pinH, b.pin, p.num)));
+        parts.push(svgNorthArrow(W - 96, mapH - 96, arrow, b.dark));
+        if (caption) parts.push(await svgCaption(0, mapH, W, capH, true));
+      }
+
+      // Caption strip (mirrors drawCaption; hoisted — used above)
+      async function svgCaption(x, y, w, h, showAddress) {
+        const o = [
+          svgRect(x, y, w, h, "#FFFFFF"),
+          svgRect(x, y, w, Math.max(4, Math.round(h*0.05)), b.primary),
+        ];
+        const pad = Math.round(h*0.22);
+        const logo = await getLogo();
+        let tx = x + pad;
+        if (logo) {
+          const lh = h*0.5, lw = lh * logo.width / logo.height;
+          o.push(svgImage(logo.src, x + pad, y + pad*1.1, lw, lh));
+          tx += lw + pad*0.8;
+        }
+        const maxW = x + w - pad - tx;
+        const fsB = Math.round(h*0.26), fsS = Math.round(h*0.17);
+        if (showAddress && locations.length === 1) {
+          o.push(svgText(tx, y + h*0.42, ell(loc0().label, 700, fsB, maxW), { size: fsB, weight: 700, fill: b.dark, middle: true }));
+          o.push(svgText(tx, y + h*0.72, ell(loc0().sub, 400, fsS, maxW), { size: fsS, fill: "#6B7688", middle: true }));
+        } else if (showAddress && locations.length > 1) {
+          o.push(svgText(tx, y + h*0.42, `${locations.length} Project Locations`, { size: fsB, weight: 700, fill: b.dark, middle: true }));
+          o.push(svgText(tx, y + h*0.72, ell(locations.map(l => l.short).join(", "), 400, fsS, maxW), { size: fsS, fill: "#6B7688", middle: true }));
+        } else if (!locations.length) {
+          o.push(svgText(tx, y + h*0.5, b.exportName, { size: fsB, weight: 700, fill: b.dark, middle: true }));
+        }
+        return o.join("\n");
+      }
+
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${b.font.replace(/"/g, "'")}">\n` +
+        `<defs><filter id="cardShadow" x="-20%" y="-20%" width="140%" height="150%">` +
+        `<feDropShadow dx="0" dy="6" stdDeviation="11" flood-color="#0B1F41" flood-opacity="0.22"/></filter></defs>\n` +
+        parts.join("\n") + `\n</svg>`;
+    }
+
+    function exportSvg() {
+      return runExport($("exportBtn"), "Rendering SVG…", async () => {
+        const svg = await buildSvg();
+        const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+        downloadUrl(url, `${brandKey}-${exportLayout}-${exportSlug()}.svg`);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        toast("SVG downloaded — vector text, pins, and shapes; maps embedded as images.", 4500);
+      });
+    }
+
     // ── PPTX export (PptxGenJS, loaded on demand) ──
     // The UMD bundle registers with Dojo's AMD `define` if it's visible, which
     // throws "multipleDefine" under the ArcGIS loader — mask `define` while the
@@ -1745,7 +1926,9 @@
     }
 
     $("exportBtn").addEventListener("click", () =>
-      exportFormat === "pptx" ? exportPptx() : exportPng());
+      exportFormat === "pptx" ? exportPptx()
+      : exportFormat === "svg" ? exportSvg()
+      : exportPng());
     $("copyBtn").addEventListener("click", () => {
       if (!CLIPBOARD_OK) { toast("Copy not supported here — use Export instead."); return; }
       copyPng();
