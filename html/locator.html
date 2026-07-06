@@ -371,6 +371,10 @@
           <label class="cap-toggle" title="Include the styled caption strip in the export">
             <calcite-switch id="capSwitch" checked scale="s"></calcite-switch> Caption
           </label>
+          <label class="cap-toggle" id="editableRow" hidden
+            title="Build the slide from separate text boxes, images, and shapes you can edit in PowerPoint, instead of one flattened image. Text uses the brand font when installed (PowerPoint substitutes otherwise).">
+            <calcite-switch id="editableSwitch" checked scale="s"></calcite-switch> Editable elements
+          </label>
         </div>
         <div class="export-row">
           <calcite-button id="copyBtn" icon-start="copy-to-clipboard" appearance="outline" kind="brand" scale="s" disabled
@@ -469,7 +473,9 @@
           <span class="ui-sample ui-btn solid"><calcite-icon icon="save" scale="s"></calcite-icon> Save</span>,
           or <span class="ui-sample ui-btn outline"><calcite-icon icon="copy-to-clipboard" scale="s"></calcite-icon> Copy</span>
           puts the image on the clipboard to paste onto a slide. Toggle <em>Caption</em>
-          for the styled text strip.</li>
+          for the styled text strip. For PPTX, <em>Editable elements</em> builds the
+          slide from separate text boxes, images, and shapes you can rearrange and
+          rewrite in PowerPoint.</li>
       </ol>
       <p class="info-fine">Parcel data: TRPA GIS · Home button returns to the Tahoe Basin.
         Browse and filter all EIP projects on the <strong>EIP Projects Map</strong>
@@ -1124,7 +1130,11 @@
       }
     });
     let exportFormat = "png";
-    wireSeg("formatSeg", (v) => { exportFormat = v; });
+    wireSeg("formatSeg", (v) => {
+      exportFormat = v;
+      // The editable-elements option only applies to PPTX
+      $("editableRow").hidden = v !== "pptx";
+    });
 
     // ───────────── Export ─────────────
     function loadImage(src) { return new Promise((res, rej) => { const im = new Image();
@@ -1263,9 +1273,11 @@
       while (t.length > 1 && ctx.measureText(t + "…").width > maxW) t = t.slice(0, -1);
       return t + "…";
     }
-    // LOCATION(S) card, anchored bottom-left at (x, yBottom); auto-sizes to the text.
-    function drawLocationCard(ctx, x, yBottom, s) {
-      if (!locations.length) return; const b = brand();
+    // LOCATION(S) card geometry — rows + measured box, shared by the canvas
+    // renderer (drawLocationCard) and the editable-PPTX builder so both
+    // produce the same card.
+    function locationCardLayout(s) {
+      if (!locations.length) return null;
       const fsL = 26*s, fsA = 44*s, fsM = 28*s, pad = 34*s, bar = 9*s;
       const single = locations.length === 1;
       const MAX_ROWS = 6;
@@ -1276,20 +1288,29 @@
         : locations.slice(0, MAX_ROWS).map((l, i) => ({ bold: `${i+1}  ${l.label}`,
             grayAppend: l.short !== l.label ? `  ·  ${l.short}` : "" }));
       if (!single && locations.length > MAX_ROWS) rows.push({ gray: `+${locations.length - MAX_ROWS} more` });
-      ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
-      // measure widest row
+      // measure widest row (fonts are preloaded by both export paths)
+      const mctx = document.createElement("canvas").getContext("2d");
       let wMax = 0;
       for (const r of rows) {
         let wRow = 0;
-        if (r.bold) { ctx.font = `700 ${single ? fsA : fsM*1.15}px ${baseFont()}`; wRow += ctx.measureText(r.bold).width; }
-        if (r.grayAppend) { ctx.font = `400 ${fsM}px ${baseFont()}`; wRow += ctx.measureText(r.grayAppend).width; }
-        if (r.gray) { ctx.font = `400 ${fsM}px ${baseFont()}`; wRow = Math.max(wRow, ctx.measureText(r.gray).width); }
+        if (r.bold) { mctx.font = `700 ${single ? fsA : fsM*1.15}px ${baseFont()}`; wRow += mctx.measureText(r.bold).width; }
+        if (r.grayAppend) { mctx.font = `400 ${fsM}px ${baseFont()}`; wRow += mctx.measureText(r.grayAppend).width; }
+        if (r.gray) { mctx.font = `400 ${fsM}px ${baseFont()}`; wRow = Math.max(wRow, mctx.measureText(r.gray).width); }
         wMax = Math.max(wMax, wRow);
       }
       const rowH = single ? 0 : fsM * 1.55;
       const h = single ? pad*2 + fsL + fsA*1.05 + fsM*1.15
                        : pad*2 + fsL + rows.length * rowH + fsM*0.2;
       const w = wMax + bar + pad*2;
+      return { rows, single, fsL, fsA, fsM, pad, bar, rowH, w, h };
+    }
+
+    // LOCATION(S) card, anchored bottom-left at (x, yBottom); auto-sizes to the text.
+    function drawLocationCard(ctx, x, yBottom, s) {
+      const L = locationCardLayout(s);
+      if (!L) return; const b = brand();
+      const { rows, single, fsL, fsA, fsM, pad, bar, rowH, w, h } = L;
+      ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
       const y = yBottom - h;
       ctx.save(); ctx.shadowColor = "rgba(11,31,65,0.22)"; ctx.shadowBlur = 22*s; ctx.shadowOffsetY = 6*s;
       ctx.fillStyle = "#fff"; roundRect(ctx, x, y, w, h, 14*s); ctx.fill(); ctx.restore();
@@ -1489,9 +1510,204 @@
       });
       return pptxLoadPromise;
     }
+    // ── Editable PPTX composition ──
+    // Builds the slide from native PowerPoint parts — text boxes, images,
+    // shapes — instead of one flattened canvas, so staff can retitle, move,
+    // and restyle everything after export. The maps stay raster (they're
+    // WebGL renders) with pins burned in so they can't drift; everything
+    // else is a separate element. Geometry mirrors the canvas compose*
+    // functions 1:1, converted at the layout's px-per-inch (EXPORT canvases
+    // are 180 px/in on the 16:9 slide, 200 px/in on letter portrait).
+    // Text declares the brand font by name; PowerPoint substitutes when the
+    // font isn't installed (PPTX can't embed fonts from the browser).
+    function pptFont() { return brand().font.split(",")[0].replace(/'/g, "").trim(); }
+    const pptHex = (c) => c.replace("#", "");
+    const PPT_GRAY = "6B7688";
+
+    // Burn pins (and an optional backfill for the basin mask) into a map
+    // shot at its final composed size → PNG data URL for addImage.
+    function shotDataUrl(img, w, h, pins, pinH, backfill) {
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(w); cv.height = Math.round(h);
+      const ctx = cv.getContext("2d");
+      if (backfill) { ctx.fillStyle = backfill; ctx.fillRect(0, 0, cv.width, cv.height); }
+      if (img) ctx.drawImage(img, 0, 0, cv.width, cv.height);
+      const b = brand();
+      (pins || []).forEach(p => drawPin(ctx, p.nx * cv.width, p.ny * cv.height, pinH, b.pin, p.num));
+      return cv.toDataURL("image/png");
+    }
+
+    async function northArrowDataUrl(size, hexColor) {
+      const cv = document.createElement("canvas"); cv.width = size; cv.height = size;
+      await drawNorthArrow(cv.getContext("2d"), size / 2, size / 2, size, hexColor);
+      return cv.toDataURL("image/png");
+    }
+
+    async function buildEditablePptx() {
+      if (document.fonts) { const fam = pptFont();
+        await Promise.all([400,600,700].map(w => document.fonts.load(`${w} 40px '${fam}'`))).catch(()=>{}); }
+      const caption = $("capSwitch").checked;
+      const b = brand(), font = pptFont();
+      const pptx = new window.PptxGenJS();
+      let PXI;                                   // px per inch for this layout
+      if (exportLayout === "locator") {
+        pptx.defineLayout({ name: "LETTER_P", width: 8.5, height: 11 });
+        pptx.layout = "LETTER_P"; PXI = 200;
+      } else {
+        pptx.layout = "LAYOUT_WIDE"; PXI = 180;
+      }
+      const IN = px => +(px / PXI).toFixed(3);   // px → inches
+      const PT = px => Math.round(px * 72 / PXI); // px → font points
+      const slide = pptx.addSlide();
+      slide.background = { color: "FFFFFF" };
+      const noLine = { line: { type: "none" } };
+
+      if (exportLayout === "slide") {
+        // ─ Title Slide (mirrors composeSlide) ─
+        const { W, H, margin: M, pinH, arrow } = EXPORT.slide;
+        const mp = { x: W - M - 960, y: M, w: 960, h: H - 2*M };
+        const { img, pins } = await shotBasin(Math.round(mp.w*0.72), Math.round(mp.h*0.72));
+        slide.addImage({ data: shotDataUrl(img, mp.w, mp.h, pins, pinH, rgba(BASIN_STYLE.outside)),
+          x: IN(mp.x), y: IN(mp.y), w: IN(mp.w), h: IN(mp.h) });
+        slide.addImage({ data: await northArrowDataUrl(arrow, b.dark),
+          x: IN(mp.x + mp.w - 64 - arrow/2), y: IN(mp.y + mp.h - 64 - arrow/2),
+          w: IN(arrow), h: IN(arrow) });
+        const logo = await getLogo();
+        if (logo) {
+          const lh = b.slideLogoH || 130;
+          slide.addImage({ data: logo.src, x: IN(150), y: IN(130),
+            w: IN(lh * logo.width / logo.height), h: IN(lh) });
+        }
+        const colW = IN(mp.x - 150 - 40);
+        if (caption && locations.length === 1) {
+          slide.addText(loc0().label, { x: IN(150), y: IN(530), w: colW, h: IN(115),
+            fontFace: font, fontSize: PT(92), bold: true, color: pptHex(b.dark),
+            align: "left", valign: "bottom" });
+          slide.addText(loc0().sub, { x: IN(150), y: IN(655), w: colW, h: IN(62),
+            fontFace: font, fontSize: PT(46), color: PPT_GRAY,
+            align: "left", valign: "bottom" });
+        } else if (caption && locations.length > 1) {
+          slide.addText(`${locations.length} Project Locations`, { x: IN(150), y: IN(450), w: colW, h: IN(115),
+            fontFace: font, fontSize: PT(92), bold: true, color: pptHex(b.dark),
+            align: "left", valign: "bottom" });
+          const MAX_LINES = 8;
+          const runs = locations.slice(0, MAX_LINES).map((l, i) => ({
+            text: `${i+1}.  ${l.label}${l.short !== l.label ? " — " + l.short : ""}`,
+            options: { breakLine: true, color: pptHex(b.dark), bold: true },
+          }));
+          if (locations.length > MAX_LINES)
+            runs.push({ text: `+${locations.length - MAX_LINES} more`,
+              options: { breakLine: true, color: PPT_GRAY } });
+          slide.addText(runs, { x: IN(150), y: IN(600), w: colW,
+            h: IN(runs.length * 58 + 30), fontFace: font, fontSize: PT(40),
+            align: "left", valign: "top", lineSpacing: PT(58) });
+        }
+        slide.addShape(pptx.ShapeType.rect, { x: IN(150), y: IN(mp.y + mp.h - 6),
+          w: IN(mp.x + mp.w - 150), h: IN(6), fill: { color: pptHex(b.primary) }, ...noLine });
+
+      } else if (exportLayout === "split") {
+        // ─ Detail + Basin (mirrors composeSplit) ─
+        const { W, H, capFrac, pinHZoom, pinHBasin, arrow } = EXPORT.split;
+        const capH = caption ? Math.round(H * capFrac) : 0, mapH = H - capH;
+        const leftW = Math.round(W*2/3), rightW = W - leftW;
+        const [zoom, basin] = await Promise.all([
+          shotZoom(leftW/mapH), shotBasin(Math.round(rightW*0.6), Math.round(mapH*0.6)) ]);
+        slide.addImage({ data: shotDataUrl(zoom.img, leftW, mapH, zoom.pins, pinHZoom),
+          x: 0, y: 0, w: IN(leftW), h: IN(mapH) });
+        slide.addImage({ data: shotDataUrl(basin.img, rightW, mapH, basin.pins, pinHBasin, rgba(BASIN_STYLE.outside)),
+          x: IN(leftW), y: 0, w: IN(rightW), h: IN(mapH) });
+        slide.addShape(pptx.ShapeType.rect, { x: IN(leftW-2), y: 0, w: IN(4), h: IN(mapH),
+          fill: { color: "FFFFFF" }, ...noLine });
+        slide.addImage({ data: await northArrowDataUrl(arrow, b.dark),
+          x: IN(W - 64 - arrow/2), y: IN(mapH - 64 - arrow/2), w: IN(arrow), h: IN(arrow) });
+        // LOCATION(S) card — same measured geometry as the canvas version
+        const L = locationCardLayout(1.15);
+        if (L) {
+          const cx = 44, cy = mapH - 44 - L.h;
+          slide.addShape(pptx.ShapeType.roundRect, { x: IN(cx), y: IN(cy), w: IN(L.w), h: IN(L.h),
+            rectRadius: IN(14 * 1.15), fill: { color: "FFFFFF" }, ...noLine,
+            shadow: { type: "outer", angle: 90, blur: 8, offset: 2, color: "0B1F41", opacity: 0.3 } });
+          slide.addShape(pptx.ShapeType.rect, { x: IN(cx), y: IN(cy), w: IN(L.bar), h: IN(L.h),
+            fill: { color: pptHex(b.accent) }, ...noLine });
+          const tx = cx + L.bar + L.pad;
+          slide.addText(L.single ? "LOCATION" : "LOCATIONS", { x: IN(tx), y: IN(cy + L.pad*0.5),
+            w: IN(L.w - L.bar - L.pad*1.5), h: IN(L.fsL*1.6), fontFace: font,
+            fontSize: PT(L.fsL), bold: true, color: pptHex(b.accent), align: "left", valign: "middle" });
+          const rowRuns = [];
+          for (const r of L.rows) {
+            if (r.bold) rowRuns.push({ text: r.bold,
+              options: { bold: true, color: pptHex(b.dark),
+                fontSize: PT(L.single ? L.fsA : L.fsM*1.15), breakLine: !r.grayAppend } });
+            if (r.grayAppend) rowRuns.push({ text: r.grayAppend,
+              options: { color: PPT_GRAY, fontSize: PT(L.fsM), breakLine: true } });
+            if (r.gray && !r.bold) rowRuns.push({ text: r.gray,
+              options: { color: PPT_GRAY, fontSize: PT(L.fsM), breakLine: true } });
+          }
+          slide.addText(rowRuns, { x: IN(tx), y: IN(cy + L.pad*0.5 + L.fsL*1.6),
+            w: IN(L.w - L.bar - L.pad*1.5), h: IN(L.h - L.pad - L.fsL*1.6),
+            fontFace: font, align: "left", valign: "top",
+            lineSpacing: L.single ? undefined : PT(L.rowH) });
+        }
+        if (caption) await addEditableCaption(slide, pptx, IN, PT, 0, mapH, W, capH, b, font, false);
+
+      } else {
+        // ─ Basin Only, portrait (mirrors composeLocator) ─
+        const { W, H, capFrac, pinH, arrow } = EXPORT.locator;
+        const capH = caption ? Math.round(H * capFrac) : 0, mapH = H - capH;
+        const { img, pins } = await shotBasin(850, Math.round(850 * mapH / W));
+        slide.addImage({ data: shotDataUrl(img, W, mapH, pins, pinH, rgba(BASIN_STYLE.outside)),
+          x: 0, y: 0, w: IN(W), h: IN(mapH) });
+        slide.addImage({ data: await northArrowDataUrl(arrow, b.dark),
+          x: IN(W - 96 - arrow/2), y: IN(mapH - 96 - arrow/2), w: IN(arrow), h: IN(arrow) });
+        if (caption) await addEditableCaption(slide, pptx, IN, PT, 0, mapH, W, capH, b, font, true);
+      }
+
+      // Caption strip as native parts (mirrors drawCaption): accent bar,
+      // logo image, editable text
+      async function addEditableCaption(slide, pptx, IN, PT, x, y, w, h, b, font, showAddress) {
+        slide.addShape(pptx.ShapeType.rect, { x: IN(x), y: IN(y), w: IN(w),
+          h: IN(Math.max(4, Math.round(h*0.05))), fill: { color: pptHex(b.primary) }, ...noLine });
+        const pad = Math.round(h*0.22);
+        const logo = await getLogo();
+        let tx = x + pad;
+        if (logo) {
+          const lh = h*0.5, lw = lh * logo.width / logo.height;
+          slide.addImage({ data: logo.src, x: IN(x + pad), y: IN(y + pad*1.1), w: IN(lw), h: IN(lh) });
+          tx += lw + pad*0.8;
+        }
+        const tw = x + w - pad - tx;
+        if (showAddress && locations.length === 1) {
+          slide.addText(loc0().label, { x: IN(tx), y: IN(y + h*0.42 - h*0.16), w: IN(tw), h: IN(h*0.32),
+            fontFace: font, fontSize: PT(Math.round(h*0.26)), bold: true, color: pptHex(b.dark),
+            align: "left", valign: "middle" });
+          slide.addText(loc0().sub, { x: IN(tx), y: IN(y + h*0.72 - h*0.11), w: IN(tw), h: IN(h*0.22),
+            fontFace: font, fontSize: PT(Math.round(h*0.17)), color: PPT_GRAY,
+            align: "left", valign: "middle" });
+        } else if (showAddress && locations.length > 1) {
+          slide.addText(`${locations.length} Project Locations`, { x: IN(tx), y: IN(y + h*0.42 - h*0.16),
+            w: IN(tw), h: IN(h*0.32), fontFace: font, fontSize: PT(Math.round(h*0.26)), bold: true,
+            color: pptHex(b.dark), align: "left", valign: "middle" });
+          slide.addText(locations.map(l => l.short).join(", "), { x: IN(tx), y: IN(y + h*0.72 - h*0.11),
+            w: IN(tw), h: IN(h*0.22), fontFace: font, fontSize: PT(Math.round(h*0.17)), color: PPT_GRAY,
+            align: "left", valign: "middle" });
+        } else if (!locations.length) {
+          slide.addText(b.exportName, { x: IN(tx), y: IN(y + h*0.34), w: IN(tw), h: IN(h*0.32),
+            fontFace: font, fontSize: PT(Math.round(h*0.26)), bold: true, color: pptHex(b.dark),
+            align: "left", valign: "middle" });
+        }
+      }
+
+      await pptx.writeFile({ fileName: `${brandKey}-${exportLayout}-${exportSlug()}-editable.pptx` });
+    }
+
     function exportPptx() {
       return runExport($("exportBtn"), "Rendering PPTX…", async () => {
         await ensurePptx();
+        if ($("editableSwitch").checked) {
+          await buildEditablePptx();
+          toast("PPTX downloaded — text, logo, and maps are separate editable elements.", 4000);
+          return;
+        }
         const cv = await composeCurrent();
         const pptx = new window.PptxGenJS();
         let w, h;
