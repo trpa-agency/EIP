@@ -1,2 +1,6 @@
 # Claude Code session state (harness — never commit)
 .claude/
+
+# Python bytecode (build artifact — never commit)
+__pycache__/
+*.pyc
