@@ -19,6 +19,9 @@
        AMD/UMD "multipleDefine" collision with ArcGIS's Dojo loader. -->
 
   <!-- Lexend Deca (EIP brand font) -->
+  <!-- The app is designed light-only — declaring it stops Chrome's Auto
+       Dark Mode (common on Android) from force-inverting the UI -->
+  <meta name="color-scheme" content="light" />
   <!-- Self-hosted fonts (same files the Project Locator uses) — keeps
        canvas text in the branded map export deterministic and offline-safe -->
   <link href="assets/fonts/fonts.css" rel="stylesheet" />
@@ -420,12 +423,34 @@
     }
     .copy-pill:active { transform: scale(0.97); }
     .copy-pill[disabled] { opacity: 0.5; pointer-events: none; }
-    .export-footnote {
+    .export-group { margin-bottom: 0.8rem; }
+    .export-group:last-child { margin-bottom: 0; }
+    .export-group-label {
+      font-size: 0.64rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--eip-navy);
+      opacity: 0.62;
+      margin-bottom: 0.4rem;
+    }
+
+    /* ── Info / help dialog ── */
+    .info-content {
+      font-size: 0.82rem;
+      line-height: 1.55;
+      color: var(--eip-navy);
+    }
+    .info-content p { margin-bottom: 0.6rem; }
+    .info-steps {
+      margin: 0 0 0.6rem 1.1rem;
+      padding: 0;
+    }
+    .info-steps li { margin-bottom: 0.5rem; }
+    .info-fine {
       font-size: 0.72rem;
-      color: #5a6577;
-      line-height: 1.4;
-      text-align: center;
-      margin-bottom: 0.7rem;
+      color: #7a8390;
+      margin: 0;
     }
 
     /* footprints toggle */
@@ -942,45 +967,41 @@
       appearance="transparent"
       style="--calcite-color-text-1: #fff; --calcite-color-text-3: #fff;"
     ></calcite-action>
-    <calcite-popover
-      reference-element="header-info"
-      placement="bottom-end"
-      auto-close="true"
-      heading="About this dashboard"
-      closable="true"
-    >
-      <div style="padding:0.85rem 1rem; max-width:340px; font-size:0.8rem; line-height:1.55; color: var(--eip-navy);">
-        <p style="margin-bottom:0.55rem;">
-          The map shows every EIP project with a known location. Focus
-          Areas are derived from the EIP # prefix and match
-          LakeTahoeInfo's four official categories.
-        </p>
-        <p style="margin-bottom:0.55rem;">
-          <strong>Some projects are basin-wide</strong> — research,
-          monitoring, planning, or other work without a single specific
-          point on the map. Those don't appear as pins but are included
-          in the <strong>CSV export</strong> with empty lat/lon so you
-          have the complete EIP record list.
-        </p>
-        <p style="margin-bottom:0.55rem;">
-          Use the <strong>link button</strong> in this header to copy a
-          URL that reproduces your exact view — filters, selection, and
-          map position. <strong>Map PNG / PPTX</strong> in the Export
-          section render a branded image of the current view, and
-          <strong>Locator map</strong> in the selection bar sends your
-          picks to the Project Locator for presentation maps.
-        </p>
-        <p style="margin-bottom:0.55rem;">
-          Click any pin or list row to view the project on
-          <a href="https://www.laketahoeinfo.org" target="_blank"
-             rel="noopener" style="color: var(--eip-blue);">LakeTahoeInfo</a>.
-        </p>
-        <p style="font-size:0.72rem; color:#7a8390; margin:0;">
-          Snapshot data refreshed nightly via GitHub Actions.
-        </p>
-      </div>
-    </calcite-popover>
   </header>
+
+  <!-- ── Info / help dialog — opens from the header ⓘ and automatically
+       on first visit ── -->
+  <calcite-dialog id="info-dialog" modal heading="EIP Projects Map" width-scale="s">
+    <div class="info-content">
+      <p>Every Lake Tahoe <strong>EIP project</strong> with a known location,
+        colored by Focus Area (derived from the EIP # prefix). Basin-wide
+        projects — research, monitoring, planning without a single point —
+        have no pin but are counted, listed, and included in CSV exports.</p>
+      <ol class="info-steps">
+        <li><strong>Filter</strong> — click pills to toggle;
+          <strong>double-click one to show only it</strong> (double-click
+          again to bring the rest back). More filters — program,
+          jurisdiction, watershed, funding source — live in the
+          collapsible groups; their headings show active counts.</li>
+        <li><strong>Find &amp; select</strong> — search by name or EIP #,
+          click pins or list rows for details, tick rows to build a
+          selection, then <em>Show only selected</em> to preview it.</li>
+        <li><strong>Export</strong> — <em>Data</em> saves
+          GeoJSON + Shapefile + CSV of the selection (or filtered set);
+          <em>Map image</em> renders a branded 16:9 PNG or PowerPoint
+          slide of the current view. <em>Locator map</em> in the
+          selection bar sends up to 9 picks to the Project Locator for
+          presentation maps.</li>
+        <li><strong>Share</strong> — the <calcite-icon icon="link" scale="s"
+          style="vertical-align:-3px;"></calcite-icon> button in the header
+          copies a link that reproduces your exact view: filters,
+          selection, and map position.</li>
+      </ol>
+      <p class="info-fine">Click any project for its LakeTahoeInfo page ·
+        Data refreshed nightly · Map layers: 2D/3D, clustering, and
+        detailed footprints under the sliders button on the map.</p>
+    </div>
+  </calcite-dialog>
 
   <!-- ── LEFT PANEL (Calcite Shell handles dock layout + collapse) ── -->
   <calcite-shell-panel slot="panel-start" id="cs-sidebar" display-mode="dock">
@@ -1071,40 +1092,40 @@
 
       <div class="sidebar-section">
         <div class="section-label">Export</div>
-        <div class="export-row">
-          <button id="export-all" class="export-pill" type="button"
-            title="Download the current selection (or filtered set) as GeoJSON, Shapefile (.zip), and CSV">
-            <span class="export-icon" aria-hidden="true">⬇</span> Export selection
-          </button>
-          <button id="copy-geojson" class="copy-pill" type="button"
-            title="Copy points as GeoJSON to clipboard (paste into geojson.io, ArcGIS Online, a notebook, etc.)">
-            <span class="export-icon">⧉</span> Copy GeoJSON
-          </button>
+
+        <div class="export-group">
+          <div class="export-group-label">Data — GeoJSON · Shapefile · CSV</div>
+          <div class="export-row">
+            <button id="export-all" class="export-pill" type="button"
+              title="Download the current selection (or filtered set) as GeoJSON, Shapefile (.zip), and CSV">
+              <span class="export-icon" aria-hidden="true">⬇</span> Download
+            </button>
+            <button id="copy-geojson" class="copy-pill" type="button"
+              title="Copy points as GeoJSON to clipboard (paste into geojson.io, ArcGIS Online, a notebook, etc.)">
+              <span class="export-icon">⧉</span> Copy
+            </button>
+          </div>
+          <label class="include-footprints" id="include-footprints-row">
+            <input type="checkbox" id="include-footprints" />
+            Include detailed geometry
+          </label>
+          <div class="toggle-status" id="export-target-text">
+            Will export 0 features
+          </div>
         </div>
-        <div class="export-footnote">
-          <strong>Export</strong> saves GeoJSON + Shapefile + CSV.
-          <strong>Copy</strong> puts GeoJSON on your clipboard (points only).
-        </div>
-        <div class="export-row" style="margin-top:0.55rem;">
-          <button id="export-map-png" class="export-pill" type="button"
-            title="Download a branded 16:9 image of the current map view — header, legend, and filter summary included">
-            <span class="export-icon" aria-hidden="true">⬇</span> Map PNG
-          </button>
-          <button id="export-map-pptx" class="copy-pill" type="button"
-            title="Download the same branded map image placed on a widescreen PowerPoint slide">
-            <span class="export-icon" aria-hidden="true">⬇</span> Map PPTX
-          </button>
-        </div>
-        <div class="export-footnote">
-          <strong>Map PNG / PPTX</strong> render the current view as a
-          branded 16:9 graphic with legend — ready for slides.
-        </div>
-        <label class="include-footprints" id="include-footprints-row">
-          <input type="checkbox" id="include-footprints" />
-          Include detailed geometry
-        </label>
-        <div class="toggle-status" id="export-target-text">
-          Will export 0 features
+
+        <div class="export-group">
+          <div class="export-group-label">Map image — branded 16:9 for slides</div>
+          <div class="export-row">
+            <button id="export-map-png" class="export-pill" type="button"
+              title="Download a branded image of the current map view — header, legend, and filter summary included">
+              <span class="export-icon" aria-hidden="true">⬇</span> PNG
+            </button>
+            <button id="export-map-pptx" class="copy-pill" type="button"
+              title="The same branded map image placed on a widescreen PowerPoint slide">
+              <span class="export-icon" aria-hidden="true">⬇</span> PPTX
+            </button>
+          </div>
         </div>
       </div>
 
@@ -3946,6 +3967,19 @@
     }
   }
 
+  function setupInfoDialog() {
+    const dialog = document.getElementById("info-dialog");
+    document.getElementById("header-info")
+      .addEventListener("click", () => { dialog.open = true; });
+    // Auto-open once on first visit (same pattern as the locator)
+    try {
+      if (!localStorage.getItem("eip-projects-map-seen")) {
+        localStorage.setItem("eip-projects-map-seen", "1");
+        setTimeout(() => { dialog.open = true; }, 600);
+      }
+    } catch (e) { /* storage blocked (private mode) — skip auto-open */ }
+  }
+
   function setupFilterHints() {
     // Calcite 5: the reference-element id attribute doesn't resolve —
     // assign the element programmatically (same fix as locator.html).
@@ -4239,6 +4273,7 @@
       setup3DToggle();
       setupPanelCollapse();
       setupFilterHints();
+      setupInfoDialog();
       setupShareLink();
       setupProjectCardClose();
       applyUrlState();
