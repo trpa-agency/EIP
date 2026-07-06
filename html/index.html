@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Lake Tahoe EIP — Tools &amp; Dashboards</title>
+  <title>Tools &amp; Dashboards — Lake Tahoe EIP</title>
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <link rel="apple-touch-icon" href="assets/favicon.png" />
 
-  <link href="https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- Self-hosted fonts (same files the map tools use) -->
+  <link href="assets/fonts/fonts.css" rel="stylesheet" />
 
   <style>
     :root {
@@ -218,12 +219,25 @@
         <span class="badge">Map</span>
         <h3>EIP Projects Map</h3>
         <p>
-          Interactive map of every EIP project with a known location.
-          Filter by Focus Area, Stage, watershed, jurisdiction, and program.
-          Select projects to export as GeoJSON, Shapefile, or CSV.
-          Toggle 3D terrain, footprints, and clusters.
+          Every EIP project with a known location, on an interactive 2D/3D
+          map. Filter by Focus Area, Stage, watershed, jurisdiction,
+          program, and funding source. Share a link that reproduces your
+          exact view, select projects to export data (CSV, GeoJSON,
+          Shapefile), or render a branded map image for slides.
         </p>
         <span class="arrow">Open map →</span>
+      </a>
+
+      <a class="card" href="locator.html">
+        <span class="badge">Map tool</span>
+        <h3>Project Locator</h3>
+        <p>
+          Make consistent, branded locator maps for presentations and
+          reports. Search an address, APN, or EIP project, pick an EIP or
+          TRPA style and layout, and export a PowerPoint slide or PNG —
+          or start from a selection sent over from the Projects Map.
+        </p>
+        <span class="arrow">Open tool →</span>
       </a>
 
       <div class="card placeholder" aria-disabled="true">
@@ -254,8 +268,23 @@
       </a>
       project location web services. Snapshot refreshed nightly via
       <code>scripts/Build_EIP_ProjectLocations.py</code>.
+      <span id="feedback-note" hidden>
+        These tools are in beta —
+        <a id="feedback-link" target="_blank" rel="noopener">tell us what's broken or missing</a>.
+      </span>
     </p>
   </main>
+
+  <script>
+    // Beta user-testing feedback (Survey123). Set to the published form URL
+    // with ?field:toolname=index to enable the footnote line; blank it out
+    // to retire the affordance after the test window.
+    const FEEDBACK_URL = "";
+    if (FEEDBACK_URL) {
+      document.getElementById("feedback-link").href = FEEDBACK_URL;
+      document.getElementById("feedback-note").hidden = false;
+    }
+  </script>
 
 </body>
 </html>
