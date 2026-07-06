@@ -1560,8 +1560,11 @@
   // down-right (light from upper-left), the gradient adds a soft sheen
   // on the upper-left of the pin so it doesn't read as flat-colored.
   function makiPinDataUrl(hex) {
+    // Intrinsic size is 4x the largest on-screen size — ArcGIS rasterizes
+    // picture markers from the image's natural size, and a 1x SVG renders
+    // soft on hi-DPI displays (same lesson as the locator's pins).
     const svg =
-      `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="38" viewBox="0 0 26 38">` +
+      `<svg xmlns="http://www.w3.org/2000/svg" width="104" height="152" viewBox="0 0 26 38">` +
         `<defs>` +
           `<filter id="s" x="-30%" y="-10%" width="160%" height="130%">` +
             `<feGaussianBlur in="SourceAlpha" stdDeviation="1.2"/>` +
@@ -1592,17 +1595,19 @@
   }
 
   function buildPointsRenderer() {
+    // Sizes match LakeTahoeInfo's EIP map (Leaflet MakiMarkers size "s",
+    // ~20px tall) — the previous 7-9px pins read as specks, not pins.
     return {
       type: "unique-value",
       field: "Category",
-      defaultSymbol: pointSymbol(CATEGORY_COLOR["Uncategorized"], 7),
+      defaultSymbol: pointSymbol(CATEGORY_COLOR["Uncategorized"], 16),
       defaultLabel: "Uncategorized",
       uniqueValueInfos: FOCUS_AREA_ORDER
         .filter(c => c !== "Uncategorized")
         .map(c => ({
           value: c,
           label: c,
-          symbol: pointSymbol(CATEGORY_COLOR[c], 9),
+          symbol: pointSymbol(CATEGORY_COLOR[c], 20),
         })),
     };
   }
