@@ -133,6 +133,19 @@
       background: #fff; border-bottom: 1px solid #eef1f5; }
 
     .seg { display: flex; border-radius: 7px; overflow: hidden; border: 1px solid var(--gray-border); }
+    /* ── EIP style: pill-rounded controls, matching the Projects Map's
+       look. TRPA keeps the squarer agency styling (no overrides). ── */
+    body[data-brand="eip"] .seg { border-radius: 999px; }
+    body[data-brand="eip"] .seg button { padding-left: 0.85rem; padding-right: 0.85rem; }
+    body[data-brand="eip"] .search-box { border-radius: 999px; }
+    body[data-brand="eip"] .search-box input { padding-left: 0.25rem; }
+    body[data-brand="eip"] .sec-tool { border-radius: 999px; }
+    body[data-brand="eip"] .bm-btn { border-radius: 12px; }
+    body[data-brand="eip"] .bm-btn img { border-radius: 8px; }
+    body[data-brand="eip"] calcite-button {
+      --calcite-button-corner-radius: 999px;   /* Calcite token; inert if unsupported */
+      --calcite-corner-radius-round: 999px;
+    }
     .seg button { border: none; background: #fff; cursor: pointer; font-family: var(--brand-font);
       font-size: 0.76rem; font-weight: 600; color: #6B7688; padding: 0.35rem 0.65rem; transition: all 120ms; }
     .seg button.active { background: var(--brand-primary); color: #fff; }

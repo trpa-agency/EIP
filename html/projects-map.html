@@ -1567,8 +1567,8 @@
           status.textContent = "2D flat map";
         }
       }
-      if (t.altBasemap && state.view) {
-        state.view.map.basemap = state.view.type === "3d" ? "topo-vector" : "hybrid";
+      if (t.altBasemap && state.view && state._makeBasemap) {
+        state.view.map.basemap = state._makeBasemap("humangeo");
       }
     } finally {
       restoringPrefs = false;
@@ -2360,8 +2360,7 @@
 
     const view = state.view;
     if (view) {
-      const def = view.type === "3d" ? "hybrid" : "gray-vector";
-      if (view.map.basemap && view.map.basemap.id !== def) add("bm", "1");
+      if (view.map.basemap && view.map.basemap.id !== "firefly") add("bm", "1");
       if (view.type === "3d") {
         add("d3", "1");
         const cam = view.camera;
@@ -2962,14 +2961,11 @@
       }
       demoteReferenceLayers(map.basemap);
 
-      // Persist whether the user is on the non-default basemap for the
-      // current view type (2D: gray-vector→hybrid, 3D: hybrid→topo-vector).
-      // activateView resets the basemap on 2D⇄3D switch, so the saved flag
-      // always mirrors what's actually on screen.
+      // Persist whether the user is on the alternate basemap
+      // (firefly = default, humangeo = alternate; same pair in 2D and 3D).
       map.watch("basemap", bm => {
         demoteReferenceLayers(bm);
-        const def = state.view && state.view.type === "3d" ? "hybrid" : "gray-vector";
-        const alt = !!bm && bm.id !== def;
+        const alt = !!bm && bm.id !== "firefly";
         // Only write on change — the watch fires async, and an unchanged
         // default would otherwise recreate the key right after resetApp
         // clears it.
@@ -3130,13 +3126,8 @@
       }
 
       async function activateView(view) {
-        // ─── DEFAULT BASEMAP PER VIEW (tweak in VS Code) ───────────────
-        //   3D: "hybrid"      — aerial imagery + reference labels (drapes
-        //                       over the elevation surface)
-        //   2D: "gray-vector" — Esri Light Gray Canvas (clean thematic bg)
-        // The BasemapToggle widget swaps to whichever isn't the default.
-        // ───────────────────────────────────────────────────────────────
-        map.basemap = view.type === "3d" ? "hybrid" : "gray-vector";
+        // Firefly ⇄ Human Geography work in both 2D and 3D, so the active
+        // basemap carries across view switches (no per-view reset needed).
 
         // Detach widgets from old view, attach to new
         if (state.view) {
@@ -4448,9 +4439,8 @@
           updateUrlDebounced();
         }).catch(() => {});
       }
-      // Basemap back to the per-view default (the 3D→2D switch above
-      // already resets it synchronously when it runs)
-      state.view.map.basemap = state.view.type === "3d" ? "hybrid" : "gray-vector";
+      // Basemap back to the default
+      if (state._makeBasemap) state.view.map.basemap = state._makeBasemap("firefly");
     }
     // Forget saved preferences last — the setters above re-save defaults
     // as they run, so the remove has to win.
