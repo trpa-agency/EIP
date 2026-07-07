@@ -1514,7 +1514,10 @@
     // what the sender saw. Prefs apply only on a plain (hashless) load.
     const t = u
       ? { cluster: u.cl, footprints: u.fp, threeD: u.d3, altBasemap: u.bm }
-      : { cluster: p.cluster, footprints: p.footprints, threeD: p.threeD, altBasemap: p.altBasemap };
+      // Plain loads always start on the Firefly default — the basemap is a
+      // transient view choice, not a saved preference (only share links
+      // carry it, via bm=1).
+      : { cluster: p.cluster, footprints: p.footprints, threeD: p.threeD, altBasemap: false };
     const smallScreen = window.matchMedia("(max-width: 480px)").matches;
     restoringPrefs = true;
     try {
@@ -2961,15 +2964,11 @@
       }
       demoteReferenceLayers(map.basemap);
 
-      // Persist whether the user is on the alternate basemap
-      // (firefly = default, humangeo = alternate; same pair in 2D and 3D).
+      // Basemap changes: demote the new basemap's labels and refresh the
+      // share URL. The choice is deliberately NOT persisted — every plain
+      // load starts on the Firefly default.
       map.watch("basemap", bm => {
         demoteReferenceLayers(bm);
-        const alt = !!bm && bm.id !== "firefly";
-        // Only write on change — the watch fires async, and an unchanged
-        // default would otherwise recreate the key right after resetApp
-        // clears it.
-        if (alt !== !!loadPrefs().altBasemap) savePref("altBasemap", alt);
         updateUrlDebounced();
       });
 
