@@ -141,16 +141,6 @@
       border-top-color: var(--eip-orange);
     }
 
-    .card.placeholder {
-      border-top-color: var(--gray-border);
-      background: #fafbfc;
-      cursor: default;
-    }
-    .card.placeholder:hover {
-      transform: none;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-    }
-
     .card .badge {
       font-size: 0.65rem;
       font-weight: 600;
@@ -158,7 +148,6 @@
       text-transform: uppercase;
       color: var(--eip-blue);
     }
-    .card.placeholder .badge { color: #9aa3ad; }
 
     .card h3 {
       font-size: 1.1rem;
@@ -179,7 +168,54 @@
       color: var(--eip-blue);
       margin-top: 0.25rem;
     }
-    .card.placeholder .arrow { color: #9aa3ad; }
+
+    /* ── Beta / user-testing call-to-action ── */
+    .beta-card {
+      width: 100%;
+      max-width: 920px;
+      margin-top: 1.75rem;
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(241,96,34,0.08) 100%);
+      background-color: var(--white);
+      border-radius: 12px;
+      border-left: 5px solid var(--eip-orange);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      padding: 1.35rem 1.6rem;
+      text-decoration: none;
+      color: inherit;
+      transition: transform 150ms ease-out, box-shadow 150ms ease-out;
+    }
+    .beta-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(241,96,34,0.18);
+    }
+    .beta-card .beta-icon {
+      flex-shrink: 0;
+      width: 44px; height: 44px;
+      display: grid; place-items: center;
+      border-radius: 50%;
+      background: rgba(241,96,34,0.12);
+      color: var(--eip-orange);
+    }
+    .beta-card .beta-body { flex: 1; display: flex; flex-direction: column; gap: 0.3rem; }
+    .beta-card .badge {
+      font-size: 0.65rem; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--eip-orange);
+    }
+    .beta-card h3 { font-size: 1.1rem; font-weight: 600; color: var(--eip-navy); }
+    .beta-card p { font-size: 0.88rem; color: #5a6577; line-height: 1.45; }
+    .beta-card .arrow {
+      flex-shrink: 0; align-self: center;
+      font-size: 0.85rem; font-weight: 600; color: var(--eip-orange);
+      white-space: nowrap;
+    }
+    @media (max-width: 560px) {
+      .beta-card { flex-direction: column; align-items: flex-start; }
+      .beta-card .arrow { align-self: flex-start; }
+    }
 
     /* ── Footer note ── */
     #footnote {
@@ -239,27 +275,27 @@
         </p>
         <span class="arrow">Open tool →</span>
       </a>
-
-      <div class="card placeholder" aria-disabled="true">
-        <span class="badge">Coming soon</span>
-        <h3>Forest Health Tracker</h3>
-        <p>
-          Hazardous fuels treatments, urban defense zones, and CWPP
-          implementation across the Basin's forested lands.
-        </p>
-        <span class="arrow">In development</span>
-      </div>
-
-      <div class="card placeholder" aria-disabled="true">
-        <span class="badge">Coming soon</span>
-        <h3>Watershed Restoration</h3>
-        <p>
-          Stormwater BMPs, meadow restoration, and water-quality projects
-          tracked under EIP Program 01.
-        </p>
-        <span class="arrow">In development</span>
-      </div>
     </div>
+
+    <a class="beta-card" id="beta-card" target="_blank" rel="noopener" hidden>
+      <span class="beta-icon" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+      </span>
+      <div class="beta-body">
+        <span class="badge">Beta — help us improve</span>
+        <h3>These tools are being tested — tell us what works</h3>
+        <p>
+          The Projects Map and Project Locator are in beta. Spend about
+          20 minutes trying the guided tasks, then share what was easy, what
+          confused you, and what's missing for your real work. Your feedback
+          directly shapes what we build next.
+        </p>
+      </div>
+      <span class="arrow">Start the feedback survey →</span>
+    </a>
 
     <p id="footnote">
       Data source:
@@ -279,10 +315,13 @@
     // Beta user-testing feedback (Survey123). Set to the published form URL
     // with ?field:toolname=index to enable the footnote line; blank it out
     // to retire the affordance after the test window.
-    const FEEDBACK_URL = "";
+    const FEEDBACK_URL = "https://survey123.arcgis.com/share/ebfe68b1ed224a43bfdadd09559e8116?field:toolname=index";
     if (FEEDBACK_URL) {
       document.getElementById("feedback-link").href = FEEDBACK_URL;
       document.getElementById("feedback-note").hidden = false;
+      const betaCard = document.getElementById("beta-card");
+      betaCard.href = FEEDBACK_URL;
+      betaCard.hidden = false;
     }
   </script>
 
