@@ -1482,7 +1482,7 @@
   // Beta user-testing feedback (Survey123). Set to the published form URL
   // with ?field:toolname=projects-map to enable the header chip; blank it
   // out to retire the affordance after the test window.
-  const FEEDBACK_URL = "";
+  const FEEDBACK_URL = "https://survey123.arcgis.com/share/f4e0b38aab1d412e978b5ab0bb64702f?field:toolname=projects-map";
 
   const PREFS_KEY = "eip-projects-map-prefs";
   let restoringPrefs = false;
@@ -4216,15 +4216,16 @@
 
   function setupFeedbackChip() {
     const chip = document.getElementById("feedback-chip");
+    const HIDE_KEY = "eip-beta-feedback-hidden-projects-map";  // per-page: dismiss here doesn't hide the other tools' chips
     try {
-      if (FEEDBACK_URL && localStorage.getItem("eip-beta-feedback-hidden") !== "1") {
+      if (FEEDBACK_URL && localStorage.getItem(HIDE_KEY) !== "1") {
         document.getElementById("feedback-link").href = FEEDBACK_URL;
         chip.hidden = false;
       }
     } catch (e) { /* storage blocked — leave hidden */ }
     document.getElementById("feedback-dismiss").addEventListener("click", () => {
       chip.hidden = true;
-      try { localStorage.setItem("eip-beta-feedback-hidden", "1"); } catch (e) { /* ignore */ }
+      try { localStorage.setItem(HIDE_KEY, "1"); } catch (e) { /* ignore */ }
     });
   }
 
