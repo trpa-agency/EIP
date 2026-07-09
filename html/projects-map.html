@@ -4021,7 +4021,8 @@
     document.getElementById("sel-all-visible").addEventListener("click", selectVisible);
     document.getElementById("sel-clear").addEventListener("click", clearSelection);
 
-    // Send the selection to the Project Locator (locator.html?eip=a,b,c).
+    // Send the selection to the Project Locator, now hosted in the maps
+    // repo (…/maps/tools/locator.html?eip=a,b,c).
     // The locator places points only, and caps at 9 numbered pins. Shared
     // by the selection-bar button and the header action.
     const LOCATOR_CAP = 9;
@@ -4041,14 +4042,14 @@
       if (skipped) notes.push(`${skipped} basin-wide project${skipped === 1 ? "" : "s"} skipped`);
       if (capped)  notes.push(`sending the first ${LOCATOR_CAP} of ${take.length + capped}`);
       if (notes.length) toast("Opening Project Locator — " + notes.join("; "));
-      window.open("locator.html?eip=" + encodeURIComponent(take.join(",")), "_blank", "noopener");
+      window.open("https://trpa-agency.github.io/maps/tools/locator.html?eip=" + encodeURIComponent(take.join(",")), "_blank", "noopener");
     }
     document.getElementById("sel-to-locator").addEventListener("click", openLocatorWithSelection);
     // Header action: carries the selection when there is one, otherwise
     // just opens the locator fresh
     document.getElementById("header-locator").addEventListener("click", () => {
       if (state.selection.size) openLocatorWithSelection();
-      else window.open("locator.html", "_blank", "noopener");
+      else window.open("https://trpa-agency.github.io/maps/tools/locator.html", "_blank", "noopener");
     });
 
     const showOnly = document.getElementById("sel-show-only");
