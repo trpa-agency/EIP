@@ -2,14 +2,19 @@
 Build_EIP_ProjectLocations.py
 Mason Bindl, Tahoe Regional Planning Agency
 
-Pulls EIP project locations from two Lake Tahoe Info web services and writes:
+Pulls EIP project data from the Lake Tahoe Info API (internalapi.laketahoeinfo.org,
+the anonymous REST backend behind eip.laketahoeinfo.org) and writes:
 
-1. Snapshot files (committed to git, consumed by the SPA at /html/projects-map.html):
-       <repo>/data/simple.json         - raw simple-endpoint response (all projects)
-       <repo>/data/detailed.geojson    - raw detailed-endpoint response (all projects)
-       <repo>/data/projects.geojson    - derived dashboard feed: Point FeatureCollection
-                                         with flattened Region/State/Jurisdiction/Watershed
-                                         metadata for every project that has a location
+1. Snapshot files (committed to git, consumed by the SPA at /html/projects-map.html
+   and by the tools in trpa-agency/maps):
+       <repo>/data/simple.json           - raw /projects response (all projects)
+       <repo>/data/detailed.geojson      - project footprints, dissolved per project
+       <repo>/data/detailed_eips.json    - EIP #s that have a footprint
+       <repo>/data/projects.geojson      - dashboard feed: one Point per project with a
+                                           map location, legacy GetProject field names plus
+                                           SecuredFunding / UnfundedNeed / Tags
+       <repo>/data/projects_aspatial.json - same properties for projects with no point
+                                           (regional / basin-wide / unlocated)
 
 2. ArcGIS feature classes in C:\\GIS\\Scratch.gdb (only when arcpy is available;
    filtered to the curated EIP_PROJECTS list for desktop GIS users):
@@ -60,27 +65,28 @@ DETAILED_EIPS_PATH = DATA_DIR / "detailed_eips.json"   # tiny array of EIP # tha
 
 # ------------------------------------------------------------------------
 # Lake Tahoe Info endpoints
+#
+# LT Info was re-platformed in 2026: the Angular front end at
+# eip.laketahoeinfo.org talks to an anonymous REST API at
+# internalapi.laketahoeinfo.org, and the old /WebServices/...{API_KEY}
+# routes now return the app shell HTML. No key is needed for the GET
+# routes below (everything the public Tracker pages show).
 # ------------------------------------------------------------------------
-API_KEY = "e17aeb86-85e3-4260-83fd-a2b32501c476"
-SIMPLE_URL = (
-    f"https://www.laketahoeinfo.org/WebServices/"
-    f"GetProjectSimpleLocationAndGeospatialAssociations/JSON/{API_KEY}"
-)
-DETAILED_URL = (
-    f"https://www.laketahoeinfo.org/WebServices/"
-    f"GetProjectDetailedLocationsAsFeatureCollection/JSON/{API_KEY}"
-)
-GET_PROJECT_URL = (
-    f"https://www.laketahoeinfo.org/WebServices/GetProject/JSON/{API_KEY}/{{eip}}"
-)
-EXPENDITURES_URL = (
-    f"https://www.laketahoeinfo.org/WebServices/"
-    f"GetProjectExpenditures/JSON/{API_KEY}/{{eip}}"
-)
-PROJECT_URL_TEMPLATE = "https://www.laketahoeinfo.org/Project/Detail/{project_id}"
+API_BASE = os.environ.get("LTINFO_API_BASE", "https://internalapi.laketahoeinfo.org").rstrip("/")
+PROJECTS_URL = f"{API_BASE}/projects"                                        # every project, core fields
+MAPPED_POINTS_URL = f"{API_BASE}/eip-projects/mapped-point/feature-collection"  # one point per project with a map location
+REGIONAL_URL = f"{API_BASE}/eip-projects/regional/feature-collection"       # basin-wide / state / jurisdiction projects
+PROJECT_DETAIL_URL = f"{API_BASE}/eip-projects/by-number/{{eip}}"           # focus area, program, action priority, thresholds, funding
+EXPENDITURES_URL = f"{API_BASE}/projects/{{pid}}/expenditures"              # per-year rows by funding source
+LOCATION_FC_URL = f"{API_BASE}/projects/{{pid}}/location-as-feature-collection"  # simple + detailed geometry for one project
+FACT_SHEET_URL_TEMPLATE = "https://eip.laketahoeinfo.org/projects/fact-sheet/{eip}"
+PROJECT_URL_TEMPLATE = "https://laketahoeinfo.org/projects/{project_id}"   # LT Info project detail page
+REQUEST_WORKERS = 8                               # parallel per-project calls (polite to LT Info)
 
-# Fields from GetProject we copy into projects.geojson properties.
-# (Lat/Lon/ProjectURL come from the simple endpoint; we don't re-set them.)
+# Fields written to every projects.geojson / projects_aspatial.json record.
+# Names are the legacy GetProject names so the dashboard, the locator, and the
+# Funding Priorities tool keep working; NEW_FIELDS extend the schema with what
+# the new API adds (secured funding and unfunded need were not available before).
 GET_PROJECT_FIELDS = [
     "EIPFocusArea",          # canonical focus-area name (e.g. "Watersheds and Water Quality")
     "EIPProgram",            # sub-program (e.g. "Stormwater Management Program")
@@ -104,6 +110,14 @@ GET_PROJECT_FIELDS = [
     "IsEIPProject",
     "IsTransportationProject",
     "IsLakeClarityProject",
+]
+NEW_FIELDS = [
+    "SecuredFunding",        # dollars the implementer reports as secured
+    "UnfundedNeed",          # EstimatedTotalCost - SecuredFunding, as the Tracker computes it
+    "Tags",                  # "; "-joined project tags (e.g. "Climate Resilience; LTRA")
+    "ProjectLocationGroup",  # regional projects: Region / State / Jurisdiction
+    "ProjectLocationArea",   # regional projects: Basin-wide, California, Placer County, CA, ...
+    "LastModificationDate",  # ISO timestamp from the Tracker
 ]
 
 # ------------------------------------------------------------------------
@@ -180,118 +194,78 @@ def focus_area_from_eip(eip_number: str) -> str:
 
 
 # ------------------------------------------------------------------------
-# GetProject enrichment — pulls per-project rich fields used by the popup
+# Per-project enrichment against the new API
 # ------------------------------------------------------------------------
-def _eip_lookup_candidates(eip: str):
-    """Return EIP # variants to try when GetProject returns 404.
-    The simple endpoint sometimes uses '01.02.01.00.70' but GetProject
-    only accepts the canonical '01.02.01.0070'."""
-    candidates = [eip]
-    parts = eip.split(".")
-    if len(parts) == 5:
-        # Try collapsing the last two segments into one (zero-padded to 4)
-        try:
-            tail = parts[-2] + parts[-1]
-            candidates.append(".".join(parts[:-2] + [tail.zfill(4)]))
-        except Exception:
-            pass
-    return candidates
-
-
-def fetch_project_details(eip: str, session: requests.Session, timeout: int = 15):
-    """Return GetProject record for one EIP # (dict) or None on failure."""
-    for candidate in _eip_lookup_candidates(eip):
-        url = GET_PROJECT_URL.format(eip=candidate)
+def _get_json(url: str, session: requests.Session, timeout: int = 20, retries: int = 2):
+    """GET a JSON document. Returns None on 404 or after `retries` failures,
+    so one bad project never fails the nightly run."""
+    for attempt in range(retries + 1):
         try:
             resp = session.get(url, timeout=timeout)
             if resp.status_code == 404:
-                continue
+                return None
             resp.raise_for_status()
-            data = resp.json()
-            if isinstance(data, list):
-                if not data:
-                    continue
-                return data[0]
-            return data
-        except (requests.RequestException, ValueError):
-            continue
+            return resp.json()
+        except (requests.RequestException, ValueError) as e:
+            if attempt == retries:
+                log.warning(f"GET failed after {retries + 1} tries: {url} ({e})")
+                return None
+            time.sleep(1.5 * (attempt + 1))
     return None
 
 
-def fetch_all_project_details(eip_numbers, max_workers: int = 8):
-    """Parallel-fetch GetProject for every EIP #. Returns dict EIP -> record.
-    EIPs that 404 / time out are silently skipped (caller logs the count)."""
+def _fetch_many(keys, url_for, max_workers: int = REQUEST_WORKERS, label: str = ""):
+    """Parallel GET for a list of keys. Returns {key: json} for the ones that
+    came back; failures are logged by _get_json and skipped."""
     out = {}
-    if not eip_numbers:
+    keys = [k for k in keys if k is not None]
+    if not keys:
         return out
+    t0 = time.time()
     with requests.Session() as session:
+        session.headers["User-Agent"] = "TRPA-EIP-snapshot/2.0 (+https://github.com/trpa-agency/EIP)"
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
-            futures = {
-                ex.submit(fetch_project_details, eip, session): eip
-                for eip in eip_numbers
-            }
+            futures = {ex.submit(_get_json, url_for(k), session): k for k in keys}
             for fut in as_completed(futures):
-                eip = futures[fut]
-                rec = fut.result()
-                if rec is not None:
-                    out[eip] = rec
+                data = fut.result()
+                if data is not None:
+                    out[futures[fut]] = data
+    log.info(f"{label or 'fetch'}: {len(out):,}/{len(keys):,} returned data ({time.time() - t0:.1f}s)")
     return out
 
 
-def fetch_project_expenditures(eip: str, session: requests.Session, timeout: int = 15):
-    """Return GetProjectExpenditures rows for one EIP # (list of
-    {Year, FundingSource, Expenditure}) or None on failure."""
-    for candidate in _eip_lookup_candidates(eip):
-        url = EXPENDITURES_URL.format(eip=candidate)
-        try:
-            resp = session.get(url, timeout=timeout)
-            if resp.status_code == 404:
-                continue
-            resp.raise_for_status()
-            data = resp.json()
-            if isinstance(data, list):
-                return data
-        except (requests.RequestException, ValueError):
-            continue
-    return None
+def fetch_all_project_details(eip_numbers):
+    """eip-projects/by-number for every project number -> {eip: record}.
+    The record carries focus area, program, action priority, threshold
+    categories, estimated cost, secured funding, unfunded need, and the
+    reported expenditure total."""
+    return _fetch_many(sorted(set(eip_numbers)), lambda e: PROJECT_DETAIL_URL.format(eip=e), label="Project details")
 
 
-def fetch_all_project_expenditures(eip_numbers, max_workers: int = 8):
-    """Parallel-fetch GetProjectExpenditures for every EIP #. Returns dict
-    EIP -> rows. EIPs that 404 / time out are silently skipped (non-fatal
-    by construction — the funding fields just stay None for those)."""
-    out = {}
-    if not eip_numbers:
-        return out
-    with requests.Session() as session:
-        with ThreadPoolExecutor(max_workers=max_workers) as ex:
-            futures = {
-                ex.submit(fetch_project_expenditures, eip, session): eip
-                for eip in eip_numbers
-            }
-            for fut in as_completed(futures):
-                eip = futures[fut]
-                rows = fut.result()
-                if rows is not None:
-                    out[eip] = rows
-    return out
+def fetch_all_project_expenditures(project_ids):
+    """projects/{id}/expenditures for every project id -> {id: rows}. Each
+    row is one funding source in one calendar year (DisplayName,
+    SectorName, ExpenditureAmount)."""
+    return _fetch_many(sorted(set(project_ids)), lambda i: EXPENDITURES_URL.format(pid=i), label="Expenditures")
 
 
 def summarize_expenditures(rows):
     """Collapse per-year expenditure rows into two filterable props.
     FundingSources is semicolon-joined (source names contain commas,
-    e.g. 'California Tahoe Conservancy, Prop 68')."""
+    e.g. 'Proposition 1 (CTC)' vs 'California Tahoe Conservancy, Prop 68').
+    Sources are listed even when every row for them is $0 (a committed
+    source that has not spent yet is still a partner on the project)."""
     if not rows:
         return {"FundingSources": None, "TotalExpenditure": None}
     sources = sorted({
-        str(r.get("FundingSource")).strip()
+        str(r.get("DisplayName") or r.get("FundingSource") or "").strip()
         for r in rows
-        if r.get("FundingSource") and str(r.get("FundingSource")).strip()
+        if (r.get("DisplayName") or r.get("FundingSource"))
     })
     total = 0.0
     any_amount = False
     for r in rows:
-        v = r.get("Expenditure")
+        v = r.get("ExpenditureAmount", r.get("Expenditure"))
         if v is None:
             continue
         try:
@@ -300,18 +274,33 @@ def summarize_expenditures(rows):
         except (TypeError, ValueError):
             continue
     return {
-        "FundingSources": "; ".join(sources) if sources else None,
+        "FundingSources": "; ".join(s for s in sources if s) or None,
         "TotalExpenditure": round(total, 2) if any_amount else None,
     }
 
 
 def project_url_for(rec: dict, pid_str: str) -> str:
-    """Prefer ProjectSummaryUrl from GetProject, fall back to the templated URL."""
-    if rec:
-        url = rec.get("ProjectSummaryUrl")
-        if url:
-            return url
+    """LT Info project detail page for a project id."""
     return PROJECT_URL_TEMPLATE.format(project_id=pid_str) if pid_str else ""
+
+
+def _focus_label(detail: dict, eip: str) -> str:
+    """'01 - Watersheds and Water Quality' from the detail record, falling
+    back to the EIP-number prefix when the project has no focus area."""
+    if detail and detail.get("EIPFocusAreaName"):
+        num = detail.get("EIPFocusAreaNumber")
+        return f"{int(num):02d} - {detail['EIPFocusAreaName']}" if num is not None else detail["EIPFocusAreaName"]
+    return focus_area_from_eip(eip)
+
+
+def _year(v):
+    """Coerce a year-ish value to int or None (the API already sends ints)."""
+    if v is None or (isinstance(v, float) and v != v):
+        return None
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
 
 # ------------------------------------------------------------------------
 # API schema candidates (resilient to future key renames)
@@ -418,30 +407,89 @@ def curated_category_lookup():
 # Simple endpoint
 # ------------------------------------------------------------------------
 def fetch_simple():
-    log.info(f"Fetching simple locations: {SIMPLE_URL}")
-    resp = requests.get(SIMPLE_URL, timeout=60)
+    """Build the 'simple' frame: one row per project with the core fields
+    from /projects plus a representative point for projects that have a
+    map location. Replaces the retired GetProjectSimpleLocationAndGeospatialAssociations
+    feed; the raw /projects response is kept in data/simple.json.
+
+    Projects whose only location is regional (Basin-wide, a state, a
+    jurisdiction) are kept ASPATIAL on purpose: the Tracker's regional
+    feature collection gives them a centroid of the whole area, which
+    reads as a false precise location on a map. Their group and area are
+    carried in ProjectLocationGroup / ProjectLocationArea instead.
+    """
+    log.info(f"Fetching projects: {PROJECTS_URL}")
+    resp = requests.get(PROJECTS_URL, timeout=120)
     resp.raise_for_status()
     SIMPLE_JSON_PATH.write_text(resp.text, encoding="utf-8")
     log.info(f"Wrote raw JSON to {SIMPLE_JSON_PATH} ({len(resp.text):,} bytes)")
-
-    data = resp.json()
-    if isinstance(data, dict):
-        for k in ("Results", "results", "Projects", "projects", "data"):
-            if k in data and isinstance(data[k], list):
-                data = data[k]
-                break
-    if not isinstance(data, list):
-        log.warning(f"Unexpected simple-response shape (type={type(data).__name__}); "
-                    "returning empty frame")
+    projects = resp.json()
+    if not isinstance(projects, list) or not projects:
+        log.warning(f"Unexpected /projects shape (type={type(projects).__name__}); returning empty frame")
         return pd.DataFrame()
 
-    df = pd.DataFrame(data)
-    if df.empty:
-        log.warning("Simple endpoint returned zero rows")
-        return df
-    log.info(f"Simple endpoint: {len(df):,} rows, columns={list(df.columns)}")
-    log.info(f"First row sample: "
-             f"{json.dumps(df.head(1).to_dict(orient='records')[0], default=str)[:1200]}")
+    log.info(f"Fetching mapped points: {MAPPED_POINTS_URL}")
+    mapped = requests.get(MAPPED_POINTS_URL, timeout=120).json()
+    coords = {}
+    for f in (mapped.get("features") or []):
+        g = f.get("geometry") or {}
+        pid = (f.get("properties") or {}).get("ProjectID")
+        if g.get("type") == "Point" and pid is not None and g.get("coordinates"):
+            coords[pid] = (float(g["coordinates"][1]), float(g["coordinates"][0]))   # (lat, lon)
+    log.info(f"Mapped points: {len(coords):,} projects with a point location")
+
+    log.info(f"Fetching regional projects: {REGIONAL_URL}")
+    regional = requests.get(REGIONAL_URL, timeout=120).json()
+    regional_area = {}
+    for f in (regional.get("features") or []):
+        p = f.get("properties") or {}
+        if p.get("ProjectID") is not None:
+            regional_area[p["ProjectID"]] = (p.get("ProjectLocationGroup"), p.get("ProjectLocationArea"))
+    log.info(f"Regional projects: {len(regional_area):,}")
+
+    rows = []
+    for p in projects:
+        pid = p.get("ProjectID")
+        lat, lon = coords.get(pid, (None, None))
+        grp, area = regional_area.get(pid, (None, None))
+        rows.append({
+            # legacy column names the GDB step and build_projects_geojson key on
+            "ProjectID": pid,
+            "EIPProjectNumber": str(p.get("ProjectNumber") or "").strip(),
+            "ProjectName": p.get("ProjectName") or "",
+            "Latitude": lat,
+            "Longitude": lon,
+            "NoLocation": lat is None,
+            "Region": p.get("Region") or "",
+            "State": p.get("StateProvince") or "",
+            "Jurisdiction": p.get("Jurisdiction") or "",
+            "Watershed": p.get("Watershed") or "",
+            # core fields carried through to the outputs
+            "LeadImplementerName": p.get("LeadImplementerName"),
+            "Stage": p.get("Stage"),
+            "IsEIPProject": p.get("IsEIPProject"),
+            "IsLakeClarityProject": p.get("IsLakeClarityProject"),
+            "IsTransportationProject": p.get("IsTransportationProject"),
+            "PlanningDesignStartYear": p.get("PlanningDesignStartYear"),
+            "ImplementationStartYear": p.get("ImplementationStartYear"),
+            "CompletionYear": p.get("CompletionYear"),
+            "EstimatedTotalCost": p.get("EstimatedTotalCost"),
+            "SecuredFunding": p.get("SecuredFunding"),
+            "UnfundedNeed": p.get("UnfundedNeed"),
+            "ProjectDescription": p.get("ProjectDescription") or "",
+            "Tags": "; ".join(sorted({t.get("TagName") for t in (p.get("Tags") or []) if t.get("TagName")})) or None,
+            "ProjectLocationGroup": grp,
+            "ProjectLocationArea": area,
+            "LastModificationDate": p.get("LastModificationDate"),
+            "NumberOfReportedExpenditureRecords": p.get("NumberOfReportedExpenditureRecords") or 0,
+        })
+    df = pd.DataFrame(rows)
+    df = df[df["EIPProjectNumber"] != ""].copy()
+    stages = df["Stage"].value_counts().to_dict()
+    log.info(f"Projects frame: {len(df):,} rows; stages={stages}")
+    log.info(f"  with point location: {int((~df['NoLocation']).sum()):,}; regional only: "
+             f"{int((df['NoLocation'] & df['ProjectLocationGroup'].notna()).sum()):,}; no location at all: "
+             f"{int((df['NoLocation'] & df['ProjectLocationGroup'].isna()).sum()):,}")
     return df
 
 
@@ -646,18 +694,37 @@ def dissolve_detailed_features(fc):
     return out
 
 
-def fetch_detailed():
-    log.info(f"Fetching detailed locations: {DETAILED_URL}")
-    resp = requests.get(DETAILED_URL, timeout=120)
-    resp.raise_for_status()
-
-    fc = resp.json()
-    if not isinstance(fc, dict) or fc.get("type") != "FeatureCollection":
-        log.warning(f"Detailed endpoint did not return a GeoJSON FeatureCollection "
-                    f"(got type={fc.get('type') if isinstance(fc, dict) else type(fc).__name__})")
+def fetch_detailed(df_simple):
+    """Assemble the detailed-footprint FeatureCollection. The new API has no
+    anonymous bulk footprint route, so this calls
+    projects/{id}/location-as-feature-collection for every project that has
+    a point or regional location and keeps the 'Detail' layer features
+    (polygons, lines, points drawn by the implementer). Each feature gets
+    EIPProjectNumber / ProjectName / ProjectID properties so the dissolve
+    and the dashboard's footprints layer work as before."""
+    if df_simple.empty:
         return None
-    features = fc.get("features") or []
-    log.info(f"Detailed endpoint: {len(features):,} raw features fetched")
+    located = df_simple[(~df_simple["NoLocation"]) | df_simple["ProjectLocationGroup"].notna()]
+    by_pid = {int(r.ProjectID): (r.EIPProjectNumber, r.ProjectName) for r in located.itertuples()}
+    log.info(f"Fetching detailed locations for {len(by_pid):,} located projects...")
+    fcs = _fetch_many(list(by_pid), lambda i: LOCATION_FC_URL.format(pid=i), label="Location feature collections")
+
+    features = []
+    for pid, pfc in fcs.items():
+        eip, name = by_pid[pid]
+        for f in (pfc.get("features") or []) if isinstance(pfc, dict) else []:
+            props = f.get("properties") or {}
+            if props.get("LocationType") != "Detail" or not f.get("geometry"):
+                continue
+            features.append({
+                "type": "Feature",
+                "geometry": f["geometry"],
+                "properties": {"EIPProjectNumber": eip, "ProjectName": name, "ProjectID": pid,
+                               "LayerName": props.get("LayerName")},
+            })
+    fc = {"type": "FeatureCollection", "features": features}
+    log.info(f"Detailed locations: {len(features):,} raw features across "
+             f"{len({f['properties']['EIPProjectNumber'] for f in features}):,} projects")
 
     # Compute the unique-EIP index BEFORE dissolving (so it counts the
     # set of projects that have any detailed geometry — same answer
@@ -855,45 +922,71 @@ def build_projects_geojson(df_simple):
     log.info(f"Records split: {len(spatial):,} spatial · {len(aspatial):,} aspatial "
              f"(basin-wide / no specific location)")
 
-    # Pass 2 — parallel-fetch GetProject for ALL projects (one batch)
-    all_eips = sorted({str(r.get(pn_key, "")).strip() for r in
-                       (list(r for r, _, _ in spatial) + aspatial)
-                       if r.get(pn_key)})
-    t0 = time.time()
-    log.info(f"Fetching GetProject for {len(all_eips)} EIP numbers...")
-    details = fetch_all_project_details(all_eips, max_workers=8)
-    log.info(f"GetProject: {len(details):,}/{len(all_eips):,} returned data "
-             f"({time.time() - t0:.1f}s)")
+    # Pass 2 — per-project detail (focus area, program, action priority,
+    # thresholds, funding) for ALL projects, one parallel batch
+    all_rows = list(r for r, _, _ in spatial) + aspatial
+    all_eips = sorted({str(r.get(pn_key, "")).strip() for r in all_rows if r.get(pn_key)})
+    log.info(f"Fetching project details for {len(all_eips)} EIP numbers...")
+    details = fetch_all_project_details(all_eips)
 
-    # Pass 2b — parallel-fetch GetProjectExpenditures (funding sources +
-    # total spent). Separate timed batch; keep 8 workers (polite to LTinfo).
-    t1 = time.time()
-    log.info(f"Fetching GetProjectExpenditures for {len(all_eips)} EIP numbers...")
-    expenditures = fetch_all_project_expenditures(all_eips, max_workers=8)
-    log.info(f"GetProjectExpenditures: {len(expenditures):,}/{len(all_eips):,} "
-             f"returned data ({time.time() - t1:.1f}s)")
+    # Pass 2b — expenditures by funding source, only where the Tracker says
+    # there are rows (saves ~a third of the calls)
+    pids = sorted({int(r["ProjectID"]) for r in all_rows
+                   if r.get("ProjectID") is not None and (r.get("NumberOfReportedExpenditureRecords") or 0) > 0})
+    log.info(f"Fetching expenditures for {len(pids)} projects...")
+    expenditures = fetch_all_project_expenditures(pids)
+
+    def _clean(val):
+        if isinstance(val, float) and (val != val):   # NaN
+            return None
+        if hasattr(val, "item"):                      # numpy scalar
+            val = val.item()
+        return val
 
     def build_props(r, rec):
         pn = str(r.get(pn_key, "")).strip()
         pid = r.get(pid_key) if pid_key else None
-        pid_str = str(pid).strip() if pid is not None and not pd.isna(pid) else ""
+        pid_str = str(int(pid)) if pid is not None and not pd.isna(pid) else ""
+        rec = rec or {}
+        state = _clean(r.get("State")) or None
         props = {
             "ProjectID": pid_str,
             "EIPProjectNumber": pn,
             "ProjectName": str(r.get(name_key, "")) if name_key else "",
-            "Category": focus_area_from_eip(pn),
+            "Category": _focus_label(rec, pn),
             "ProjectURL": project_url_for(rec, pid_str),
+            # legacy GetProject field names, filled from the new API
+            "EIPFocusArea": rec.get("EIPFocusAreaName"),
+            "EIPProgram": rec.get("EIPProgramName"),
+            "EIPActionPriority": rec.get("EIPActionPriorityName"),
+            "ProjectDescription": rec.get("ProjectDescription") or _clean(r.get("ProjectDescription")) or "",
+            "ProjectThresholdCategories": rec.get("ThresholdCategories"),
+            "LeadImplementer": rec.get("LeadImplementerName") or _clean(r.get("LeadImplementerName")),
+            "PlanningStartDate": _year(rec.get("PlanningDesignStartYear", _clean(r.get("PlanningDesignStartYear")))),
+            "ImplementationStartDate": _year(rec.get("ImplementationStartYear", _clean(r.get("ImplementationStartYear")))),
+            "EndDate": _year(rec.get("CompletionYear", _clean(r.get("CompletionYear")))),
+            "Stage": rec.get("Stage") or _clean(r.get("Stage")),
+            "ProjectRegion": _clean(r.get("Region")) or None,
+            "ProjectState": state,
+            "ProjectJurisdiction": _clean(r.get("Jurisdiction")) or None,
+            "ProjectWatershed": _clean(r.get("Watershed")) or None,
+            "ProjectSummaryUrl": project_url_for(rec, pid_str),
+            "ProjectFactSheetUrl": FACT_SHEET_URL_TEMPLATE.format(eip=pn),
+            "TMDLPollutantSourceCategory": None,     # not exposed by the new API
+            "EstimatedTotalCost": _clean(rec.get("EstimatedTotalCost", _clean(r.get("EstimatedTotalCost")))),
+            "EstimatedAnnualOperatingCost": _clean(rec.get("EstimatedAnnualOperatingCost")),
+            "IsEIPProject": bool(_clean(r.get("IsEIPProject"))),
+            "IsTransportationProject": bool(_clean(r.get("IsTransportationProject"))),
+            "IsLakeClarityProject": bool(_clean(r.get("IsLakeClarityProject"))),
         }
-        # Merge in the rich GetProject fields. Use None for missing so
-        # downstream consumers (popup, exports) have a consistent schema.
-        for field in GET_PROJECT_FIELDS:
-            val = rec.get(field) if rec else None
-            if isinstance(val, float) and (val != val):   # NaN
-                val = None
-            props[field] = val
-        # Funding enrichment (FundingSources + TotalExpenditure) — both
-        # spatial and aspatial records get the fields (None when unknown)
-        props.update(summarize_expenditures(expenditures.get(pn)))
+        for field in NEW_FIELDS:
+            props[field] = _clean(rec.get(field, _clean(r.get(field))))
+        # Funding sources and total spent from the expenditure rows; the
+        # Tracker's own ReportedExpenditure total wins when present.
+        spend = summarize_expenditures(expenditures.get(int(pid)) if pid is not None and not pd.isna(pid) else None)
+        if rec.get("ReportedExpenditure") is not None:
+            spend["TotalExpenditure"] = _clean(rec.get("ReportedExpenditure"))
+        props.update(spend)
         return props
 
     # Pass 3 — projects.geojson (spatial features for the map)
@@ -948,8 +1041,8 @@ def main():
         df_simple = fetch_simple()
         build_projects_geojson(df_simple)
 
-        # 2. Always: fetch detailed, write data/detailed.geojson (raw, all projects)
-        fc = fetch_detailed()
+        # 2. Always: fetch detailed footprints, write data/detailed.geojson
+        fc = fetch_detailed(df_simple)
 
         # 3. arcpy-only: build curated GDB feature classes
         if HAVE_ARCPY:

@@ -1410,10 +1410,6 @@
     { name: "Category",                  type: "string", alias: "Focus Area" },
     { name: "ProjectURL",                type: "string" },
   ];
-  const LIVE_REST_URL =
-    "https://www.laketahoeinfo.org/WebServices/" +
-    "GetProjectSimpleLocationAndGeospatialAssociations/JSON/" +
-    "e17aeb86-85e3-4260-83fd-a2b32501c476";
   const TRPA_BOUNDARY_URL =
     "https://maps.trpa.org/server/rest/services/Boundaries/FeatureServer/4";
 
@@ -1764,6 +1760,8 @@
     "Implementation":      "#0072CE",
     "Planning/Design":     "#7B6A8A",
     "Post-Implementation": "#7A8390",
+    "Deferred":            "#B47E00",
+    "Terminated":          "#9C3E27",
   };
 
   function formatCurrency(n) {
@@ -1977,7 +1975,7 @@
   // Stage filter (checkbox list, identical pattern to Focus Area)
   // ─────────────────────────────────────────────────────────────────────
   const STAGE_ORDER = [
-    "Planning/Design", "Implementation", "Post-Implementation", "Completed", NONE
+    "Planning/Design", "Implementation", "Post-Implementation", "Completed", "Deferred", "Terminated", NONE
   ];
 
   function buildStageFilters() {
@@ -2321,6 +2319,8 @@
     "Implementation": "I",
     "Post-Implementation": "O",
     "Completed": "C",
+    "Deferred": "D",
+    "Terminated": "T",
     [NONE]: "N",
   };
   const URL_SEL_CAP = 50;
@@ -4558,22 +4558,10 @@
       return;
     }
 
-    // Background live "ping" — confirms the upstream API is reachable but
-    // doesn't swap features. The snapshot carries 32 fields per project
-    // (from GetProject); the live simple endpoint only has basics, so
-    // hot-swapping would lose the rich popup data. The nightly GitHub
-    // Action keeps the snapshot fresh.
-    try {
-      const live = await loadLiveRefresh();
-      const localFC = { type: "FeatureCollection", features: state.allFeatures };
-      const drift = fcChanged(localFC, live);
-      const note = drift
-        ? `Live (delta detected — snapshot may be stale)`
-        : statusCountText();
-      setStatus(drift ? "snapshot" : "snapshot", note);
-    } catch (err) {
-      console.warn("Live ping skipped:", err.message);
-    }
+    // The snapshot is the only data source. The old background "live ping"
+    // hit a WebServices route that the 2026 LT Info re-platform retired;
+    // the nightly GitHub Action keeps the snapshot fresh instead.
+    setStatus("snapshot", statusCountText());
   }
 
   document.addEventListener("DOMContentLoaded", init);

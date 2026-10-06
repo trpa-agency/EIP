@@ -33,13 +33,21 @@ agency org.
 ## Running the data pipeline
 
 The pipeline lives in [`scripts/Build_EIP_ProjectLocations.py`](scripts/Build_EIP_ProjectLocations.py).
-It writes three files into `data/`:
+It reads the Lake Tahoe Info API at `internalapi.laketahoeinfo.org` (the anonymous
+REST backend behind the re-platformed Project Tracker; no API key) and writes
+five files into `data/`:
 
-| File                       | Source                                                    | Filter |
-|----------------------------|-----------------------------------------------------------|--------|
-| `data/simple.json`         | `GetProjectSimpleLocationAndGeospatialAssociations` JSON  | none   |
-| `data/detailed.geojson`    | `GetProjectDetailedLocationsAsFeatureCollection` GeoJSON  | none   |
-| `data/projects.geojson`    | derived from `simple.json` + per-project `GetProject` enrichment (Point FC, dashboard feed) | none   |
+| File                          | Source                                                                 |
+|-------------------------------|------------------------------------------------------------------------|
+| `data/simple.json`            | raw `/projects` response, every project in the Tracker                 |
+| `data/projects.geojson`       | one Point per project in `/eip-projects/mapped-point/feature-collection`, with the legacy GetProject field names plus `SecuredFunding`, `UnfundedNeed`, `Tags` from `/eip-projects/by-number/{eip}` and funding sources from `/projects/{id}/expenditures` |
+| `data/projects_aspatial.json` | the same properties for projects with no point (regional, basin-wide, or unlocated) |
+| `data/detailed.geojson`       | `Detail` features from `/projects/{id}/location-as-feature-collection`, dissolved to one feature per project and geometry type |
+| `data/detailed_eips.json`     | EIP numbers that have a footprint                                      |
+
+The old `www.laketahoeinfo.org/WebServices/...{key}` routes went away with the
+2026 LT Info re-platform (they now return the app shell HTML), which is what
+stalled the nightly refresh between July and October 2026.
 
 When `arcpy` is available (ArcGIS Pro Python environment), the script also
 writes four feature classes into `C:\GIS\Scratch.gdb` for a curated subset
@@ -65,10 +73,8 @@ A timestamped run log is written to `scripts/Build_EIP_ProjectLocations.log`.
 - **ArcGIS Maps SDK 4.31** for the map and feature rendering
 - **Calcite Components 5.0** for UI primitives
 - **EIP brand**: Lexend Deca, EIP Blue / Green / Orange / Navy palette
-- **Hybrid data loading**: paints from `data/projects.geojson` first, then
-  refreshes silently from the live `laketahoeinfo.org` REST endpoint. If
-  CORS blocks the live call (likely), the snapshot is the source of truth
-  and the GitHub Action below keeps it current.
+- **Snapshot data**: paints from `data/projects.geojson`; the GitHub Action
+  below keeps the snapshot current nightly.
 
 ### Features
 
@@ -77,12 +83,12 @@ A timestamped run log is written to `scripts/Build_EIP_ProjectLocations.log`.
   EIP-number prefix (`01.*` → Watersheds and Water Quality, `02.*` →
   Forest Health, `03.*` → Sustainable Recreation and Transportation,
   `04.*` → Science, Stewardship, and Accountability).
-- **Rich popup** — each project carries 22 fields fetched from
-  LakeTahoeInfo's `GetProject` endpoint at build time: focus area &
-  sub-program, stage, description, lead implementer, watershed,
-  jurisdiction, timeline (planning → implementation → end), estimated
-  cost, threshold categories, action priority, and links to the project
-  page and PDF fact sheet.
+- **Rich popup** — each project carries the fields fetched from the
+  Tracker API at build time: focus area, program, action priority, stage,
+  description, lead implementer, watershed, jurisdiction, timeline
+  (planning → implementation → end), estimated cost, secured funding,
+  unfunded need, threshold categories, tags, and links to the project
+  page and fact sheet.
 - **Search** by project name or EIP #.
 - **Per-row selection** — checkbox on every list row + "Select visible"
   and "Clear" pills. Selection persists across filter changes so you can
@@ -121,15 +127,18 @@ runs the python script daily at 09:00 UTC, regenerates the three files in
 
 ## Data caveats
 
-- **Region / State / Jurisdiction / Watershed** fields exist on the API
-  schema but come back null for nearly every project. The dashboard
-  doesn't expose them as filters until the upstream API populates them
-  (or we layer in a spatial join).
-- **Category / Focus Area** is derived deterministically from the
-  EIP-number 2-digit prefix and the four official EIP Focus Areas at
-  `eip.laketahoeinfo.org/EIPFocusArea`. ~14 projects with non-standard
-  numeric IDs (mostly Caltrans/transportation) fall into "Uncategorized".
-- **CORS**: the `laketahoeinfo.org/WebServices/...` endpoints may not
-  include `Access-Control-Allow-Origin: *`. If the live refresh fails
-  in the browser, that's expected — the snapshot keeps the dashboard
-  up-to-date via the nightly Action.
+- **Stages**: the API returns every project, including `Deferred` and
+  `Terminated` (about 330 projects the old feed left out). Consumers that
+  want the active program should filter on stage.
+- **Regional projects** (basin-wide, a state, a jurisdiction) are kept out
+  of `projects.geojson` on purpose. The Tracker gives them a centroid of
+  the whole area, which reads as a false precise location. They are in
+  `projects_aspatial.json` with `ProjectLocationGroup` and
+  `ProjectLocationArea` set.
+- **Category / Focus Area** comes from the Tracker's taxonomy via the
+  per-project detail call; the 38 non-EIP projects have none and fall into
+  "Uncategorized".
+- **`TMDLPollutantSourceCategory`** is kept in the schema for compatibility
+  but the new API does not expose it, so it is always null.
+- **Funding fields are self-reported** by implementers. `UnfundedNeed` is
+  `EstimatedTotalCost - SecuredFunding` as the Tracker computes it.

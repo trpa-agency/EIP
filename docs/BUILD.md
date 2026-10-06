@@ -48,9 +48,11 @@ Three reference points shaped this build:
 EIP/
 ├── README.md                              # repo overview + run instructions
 ├── data/                                  # committed nightly snapshots
-│   ├── simple.json                        # raw response from GetProjectSimpleLocations…
-│   ├── detailed.geojson                   # raw response from GetProjectDetailedLocations…
-│   └── projects.geojson                   # derived dashboard feed (657 features × 27 properties)
+│   ├── simple.json                        # raw /projects response from the LT Info API
+│   ├── detailed.geojson                   # project footprints, dissolved per project
+│   ├── detailed_eips.json                 # EIP #s that have a footprint
+│   ├── projects.geojson                   # dashboard feed (one point per located project)
+│   └── projects_aspatial.json             # same properties for regional / unlocated projects
 ├── scripts/
 │   ├── Build_EIP_ProjectLocations.py      # ETL: pulls Lake Tahoe Info, derives projects.geojson
 │   └── .gitignore                         # excludes the .log only — JSON outputs are committed
@@ -67,30 +69,40 @@ EIP/
 
 ## Data pipeline
 
-The Python script makes three Lake Tahoe Info web service calls and
-derives one dashboard-ready feed.
+The Python script reads the Lake Tahoe Info API at
+`https://internalapi.laketahoeinfo.org` (anonymous GET routes, the same
+ones the Project Tracker's Angular front end calls) and derives the
+dashboard feed. The legacy `www.laketahoeinfo.org/WebServices/...{key}`
+routes were retired in the 2026 LT Info re-platform and now return the
+app shell HTML.
 
-| Source endpoint                                                | Output                  | Records |
-|---------------------------------------------------------------|-------------------------|---------|
-| `GetProjectSimpleLocationAndGeospatialAssociations/JSON/{key}` | `data/simple.json`      | ~1,073  |
-| `GetProjectDetailedLocationsAsFeatureCollection/JSON/{key}`    | `data/detailed.geojson` | ~8,506  |
-| `GetProject/JSON/{key}/{eip}` *(per-project, parallel)*         | merged into `projects.geojson` | 657 |
+| Source route                                              | Output                                   | Records |
+|-----------------------------------------------------------|------------------------------------------|---------|
+| `/projects`                                               | `data/simple.json`, frame for everything | ~1,409  |
+| `/eip-projects/mapped-point/feature-collection`           | point locations for `projects.geojson`   | ~648    |
+| `/eip-projects/regional/feature-collection`               | regional group / area on aspatial records | ~362   |
+| `/eip-projects/by-number/{eip}` *(per project, parallel)* | focus area, program, action priority, thresholds, cost, secured funding, unfunded need, reported expenditure | ~1,371 |
+| `/projects/{id}/expenditures` *(per project, parallel)*   | FundingSources, TotalExpenditure fallback | ~1,070 |
+| `/projects/{id}/location-as-feature-collection` *(per located project)* | `Detail` features for `data/detailed.geojson` | ~8,500 raw → ~600 dissolved |
 
-`projects.geojson` carries 27 properties per feature — basics
-(ProjectID, EIPProjectNumber, ProjectName, geometry) plus 22 enriched
-fields from `GetProject`: EIPFocusArea, EIPProgram, EIPActionPriority,
-ProjectDescription, Stage, LeadImplementer, ProjectRegion / State /
-Jurisdiction / Watershed, PlanningStartDate / ImplementationStartDate /
-EndDate, EstimatedTotalCost, ProjectThresholdCategories,
-TMDLPollutantSourceCategory, IsEIPProject / IsTransportationProject /
-IsLakeClarityProject, ProjectSummaryUrl, ProjectFactSheetUrl.
+`projects.geojson` and `projects_aspatial.json` keep the legacy property
+names (EIPFocusArea, EIPProgram, EIPActionPriority, ProjectDescription,
+Stage, LeadImplementer, ProjectRegion / State / Jurisdiction / Watershed,
+PlanningStartDate / ImplementationStartDate / EndDate, EstimatedTotalCost,
+ProjectThresholdCategories, TMDLPollutantSourceCategory (always null now),
+IsEIPProject / IsTransportationProject / IsLakeClarityProject,
+ProjectSummaryUrl, ProjectFactSheetUrl, FundingSources, TotalExpenditure)
+and add SecuredFunding, UnfundedNeed, Tags, ProjectLocationGroup,
+ProjectLocationArea, LastModificationDate.
 
 The script:
-- Drops the curated 11-project filter for the JSON outputs (every
-  project with a location ends up in the snapshot)
-- Derives **EIP Focus Area** from the EIP # 2-digit prefix (`01.*` →
-  Watersheds & Water Quality, etc.)
-- Parallelizes ~657 `GetProject` calls with 8 workers (≈30s total)
+- Writes every project in the Tracker (all stages, including Deferred and
+  Terminated); consumers filter on Stage
+- Keeps regional projects aspatial on purpose (their API point is the
+  centroid of a whole area, not a project location)
+- Takes the Focus Area from the Tracker's taxonomy, falling back to the
+  EIP # prefix only for projects with none
+- Runs about 3,500 per-project calls with 8 workers (≈45s on a laptop)
 - Gates the legacy ArcGIS Pro / GDB step behind `HAVE_ARCPY` so the
   script runs headless on the GitHub Action runner
 
@@ -312,16 +324,14 @@ block in `projects-map.html`.
 
 ## Known caveats
 
-- **`Region / State / Jurisdiction / Watershed` are null on the
-  simple-locations endpoint** — that's why we layer in `GetProject`
-  during the snapshot build to populate them.
-- **CORS blocks the live-refresh path in the browser** — the
-  `laketahoeinfo.org/WebServices/...` endpoints don't include
-  `Access-Control-Allow-Origin: *`. Snapshot is canonical; live ping
-  only confirms reachability for the status indicator.
-- **14 projects have non-standard numeric EIP IDs** (mostly
-  Caltrans/transportation) — they fall into "Uncategorized" because
-  the prefix-based Focus Area derivation can't classify them.
+- **No live refresh in the browser.** The dashboard reads the committed
+  snapshot only; the nightly Action is what keeps it current. (The old
+  live ping hit a WebServices route that no longer exists.)
+- **No bulk footprint route** is exposed anonymously by the new API, so
+  footprints come from one location call per located project.
+- **38 non-EIP projects** have no focus area and fall into "Uncategorized".
+- **Funding fields are self-reported** by implementers through the
+  Tracker. `UnfundedNeed` is `EstimatedTotalCost - SecuredFunding`.
 - **Calcite v2 Basemap Styles need an API key** — we don't use them.
   If we ever want actual Esri Human Geography basemap, set
   `esriConfig.apiKey = "<key>"` and switch to `arcgis/human-geography`.
