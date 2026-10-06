@@ -78,7 +78,12 @@ MAPPED_POINTS_URL = f"{API_BASE}/eip-projects/mapped-point/feature-collection"  
 REGIONAL_URL = f"{API_BASE}/eip-projects/regional/feature-collection"       # basin-wide / state / jurisdiction projects
 PROJECT_DETAIL_URL = f"{API_BASE}/eip-projects/by-number/{{eip}}"           # focus area, program, action priority, thresholds, funding
 EXPENDITURES_URL = f"{API_BASE}/projects/{{pid}}/expenditures"              # per-year rows by funding source
+EXPECTED_FUNDING_URL = f"{API_BASE}/projects/{{pid}}/expected-funding"      # secured + targeted (unsecured) amounts by funding source
+LAKE_CLARITY_URL = f"{API_BASE}/projects/{{pid}}/lake-clarity-basics"       # TMDL pollutant source category (lake clarity projects only)
+TAGS_URL = f"{API_BASE}/tags"                                               # the public tag list (project Tags arrays also carry internal tags)
+FIVE_YEAR_URL = f"{API_BASE}/eip-projects/five-year-list"                   # the EIP 5-Year Project List
 LOCATION_FC_URL = f"{API_BASE}/projects/{{pid}}/location-as-feature-collection"  # simple + detailed geometry for one project
+LTRA_PREFIX = "Lake Tahoe Restoration Act"   # funding source display names: "Lake Tahoe Restoration Act (USFS - LTBMU)" etc.
 FACT_SHEET_URL_TEMPLATE = "https://eip.laketahoeinfo.org/projects/fact-sheet/{eip}"
 PROJECT_URL_TEMPLATE = "https://laketahoeinfo.org/projects/{project_id}"   # LT Info project detail page
 REQUEST_WORKERS = 8                               # parallel per-project calls (polite to LT Info)
@@ -114,7 +119,13 @@ GET_PROJECT_FIELDS = [
 NEW_FIELDS = [
     "SecuredFunding",        # dollars the implementer reports as secured
     "UnfundedNeed",          # EstimatedTotalCost - SecuredFunding, as the Tracker computes it
-    "Tags",                  # "; "-joined project tags (e.g. "Climate Resilience; LTRA")
+    "TargetedFunding",       # dollars identified as targeted (requested, not yet secured) across all sources
+    "LTRATargetedFunding",   # targeted dollars from Lake Tahoe Restoration Act sources: the LTRA "ask"
+    "LTRASecuredFunding",    # secured dollars from LTRA sources
+    "HasLTRAFunding",        # true when any LTRA source is secured, targeted, or has expenditures on the project
+    "FundingRequests",       # "Source: secured $X, targeted $Y; ..." from the Tracker's expected-funding table
+    "IsOnFiveYearList",      # true when the project is on the EIP 5-Year Project List
+    "Tags",                  # "; "-joined PUBLIC project tags (e.g. "Climate Resilience"); internal tags are dropped
     "ProjectLocationGroup",  # regional projects: Region / State / Jurisdiction
     "ProjectLocationArea",   # regional projects: Basin-wide, California, Placer County, CA, ...
     "LastModificationDate",  # ISO timestamp from the Tracker
@@ -249,6 +260,68 @@ def fetch_all_project_expenditures(project_ids):
     return _fetch_many(sorted(set(project_ids)), lambda i: EXPENDITURES_URL.format(pid=i), label="Expenditures")
 
 
+def fetch_all_expected_funding(project_ids):
+    """projects/{id}/expected-funding -> {id: record} with TotalSecuredAmount,
+    UnfundedNeed, TargetedFundingAmount and FundingSourceRequestAmounts
+    (secured and unsecured dollars per funding source)."""
+    return _fetch_many(sorted(set(project_ids)), lambda i: EXPECTED_FUNDING_URL.format(pid=i), label="Expected funding")
+
+
+def fetch_all_lake_clarity(project_ids):
+    """projects/{id}/lake-clarity-basics for lake clarity projects -> TMDL category."""
+    return _fetch_many(sorted(set(project_ids)), lambda i: LAKE_CLARITY_URL.format(pid=i), label="Lake clarity basics")
+
+
+def fetch_public_tags():
+    """Set of tag names the Tracker marks public. Project Tags arrays also
+    carry internal bookkeeping tags (nice-factsheet, good photos, ...)."""
+    try:
+        tags = requests.get(TAGS_URL, timeout=60).json()
+        return {t["TagName"] for t in tags if t.get("IsPublic") and t.get("TagName")}
+    except Exception as e:
+        log.warning(f"Could not fetch public tags ({e}); keeping no tags")
+        return set()
+
+
+def fetch_five_year_ids():
+    """ProjectIDs on the EIP 5-Year Project List (one call)."""
+    try:
+        return {r["ProjectID"] for r in requests.get(FIVE_YEAR_URL, timeout=60).json()}
+    except Exception as e:
+        log.warning(f"Could not fetch the 5-Year List ({e})")
+        return set()
+
+
+def summarize_expected_funding(rec):
+    """Flatten an expected-funding record into the LTRA and targeted fields."""
+    out = {"TargetedFunding": None, "LTRATargetedFunding": None, "LTRASecuredFunding": None,
+           "HasLTRAFunding": False, "FundingRequests": None}
+    if not isinstance(rec, dict):
+        return out
+    rows = rec.get("FundingSourceRequestAmounts") or []
+    out["TargetedFunding"] = rec.get("TargetedFundingAmount")
+    ltra_t = ltra_s = 0.0
+    parts = []
+    for r in rows:
+        name = str(r.get("FundingSourceDisplayName") or "").strip()
+        sec = float(r.get("SecuredAmount") or 0)
+        uns = float(r.get("UnsecuredAmount") or 0)
+        if name.startswith(LTRA_PREFIX):
+            ltra_t += uns
+            ltra_s += sec
+            out["HasLTRAFunding"] = True
+        bits = []
+        if sec: bits.append(f"secured ${sec:,.0f}")
+        if uns: bits.append(f"targeted ${uns:,.0f}")
+        if name and bits:
+            parts.append(f"{name}: {', '.join(bits)}")
+    if rows:
+        out["LTRATargetedFunding"] = round(ltra_t, 2)
+        out["LTRASecuredFunding"] = round(ltra_s, 2)
+    out["FundingRequests"] = "; ".join(parts) or None
+    return out
+
+
 def summarize_expenditures(rows):
     """Collapse per-year expenditure rows into two filterable props.
     FundingSources is semicolon-joined (source names contain commas,
@@ -291,6 +364,15 @@ def _focus_label(detail: dict, eip: str) -> str:
         num = detail.get("EIPFocusAreaNumber")
         return f"{int(num):02d} - {detail['EIPFocusAreaName']}" if num is not None else detail["EIPFocusAreaName"]
     return focus_area_from_eip(eip)
+
+
+def _clean(val):
+    """NaN -> None, numpy scalars -> Python scalars (pandas rows carry both)."""
+    if isinstance(val, float) and (val != val):
+        return None
+    if hasattr(val, "item"):
+        val = val.item()
+    return val
 
 
 def _year(v):
@@ -936,12 +1018,18 @@ def build_projects_geojson(df_simple):
     log.info(f"Fetching expenditures for {len(pids)} projects...")
     expenditures = fetch_all_project_expenditures(pids)
 
-    def _clean(val):
-        if isinstance(val, float) and (val != val):   # NaN
-            return None
-        if hasattr(val, "item"):                      # numpy scalar
-            val = val.item()
-        return val
+    # Pass 2c — expected funding (secured + targeted by source) for every
+    # project with a cost estimate; TMDL category for lake clarity projects;
+    # the public tag list and the 5-Year List (one call each)
+    all_pids = sorted({int(r["ProjectID"]) for r in all_rows if r.get("ProjectID") is not None})
+    costed = [int(r["ProjectID"]) for r in all_rows if r.get("ProjectID") is not None and _clean(r.get("EstimatedTotalCost")) is not None]
+    log.info(f"Fetching expected funding for {len(costed)} projects with a cost estimate...")
+    expected = fetch_all_expected_funding(costed)
+    clarity_ids = [int(r["ProjectID"]) for r in all_rows if r.get("ProjectID") is not None and _clean(r.get("IsLakeClarityProject"))]
+    clarity = fetch_all_lake_clarity(clarity_ids)
+    public_tags = fetch_public_tags()
+    five_year = fetch_five_year_ids()
+    log.info(f"Public tags: {len(public_tags)}; 5-Year List: {len(five_year)} projects")
 
     def build_props(r, rec):
         pn = str(r.get(pn_key, "")).strip()
@@ -972,7 +1060,7 @@ def build_projects_geojson(df_simple):
             "ProjectWatershed": _clean(r.get("Watershed")) or None,
             "ProjectSummaryUrl": project_url_for(rec, pid_str),
             "ProjectFactSheetUrl": FACT_SHEET_URL_TEMPLATE.format(eip=pn),
-            "TMDLPollutantSourceCategory": None,     # not exposed by the new API
+            "TMDLPollutantSourceCategory": (clarity.get(int(pid)) or {}).get("TmdlPollutantSourceCategoryDisplayName") if pid is not None and not pd.isna(pid) else None,
             "EstimatedTotalCost": _clean(rec.get("EstimatedTotalCost", _clean(r.get("EstimatedTotalCost")))),
             "EstimatedAnnualOperatingCost": _clean(rec.get("EstimatedAnnualOperatingCost")),
             "IsEIPProject": bool(_clean(r.get("IsEIPProject"))),
@@ -981,12 +1069,21 @@ def build_projects_geojson(df_simple):
         }
         for field in NEW_FIELDS:
             props[field] = _clean(rec.get(field, _clean(r.get(field))))
+        pid_int = int(pid) if pid is not None and not pd.isna(pid) else None
+        # Public tags only
+        props["Tags"] = "; ".join(sorted(t for t in str(props.get("Tags") or "").split("; ") if t in public_tags)) or None
+        props["IsOnFiveYearList"] = pid_int in five_year
+        # Expected funding: secured + targeted by source, LTRA ask
+        props.update(summarize_expected_funding(expected.get(pid_int)))
         # Funding sources and total spent from the expenditure rows; the
         # Tracker's own ReportedExpenditure total wins when present.
-        spend = summarize_expenditures(expenditures.get(int(pid)) if pid is not None and not pd.isna(pid) else None)
+        rows = expenditures.get(pid_int)
+        spend = summarize_expenditures(rows)
         if rec.get("ReportedExpenditure") is not None:
             spend["TotalExpenditure"] = _clean(rec.get("ReportedExpenditure"))
         props.update(spend)
+        if any(str(x.get("DisplayName") or "").startswith(LTRA_PREFIX) and (x.get("ExpenditureAmount") or 0) > 0 for x in (rows or [])):
+            props["HasLTRAFunding"] = True
         return props
 
     # Pass 3 — projects.geojson (spatial features for the map)
