@@ -6,7 +6,7 @@ Pulls EIP project data from the Lake Tahoe Info API (internalapi.laketahoeinfo.o
 the anonymous REST backend behind eip.laketahoeinfo.org) and writes:
 
 1. Snapshot files (committed to git, consumed by the SPA at /html/projects-map.html
-   and by the tools in trpa-agency/maps):
+   and by the tools in trpa-agency/tools):
        <repo>/data/simple.json           - raw /projects response (all projects)
        <repo>/data/detailed.geojson      - project footprints, dissolved per project
        <repo>/data/detailed_eips.json    - EIP #s that have a footprint

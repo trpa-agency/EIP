@@ -4042,14 +4042,14 @@
       if (skipped) notes.push(`${skipped} basin-wide project${skipped === 1 ? "" : "s"} skipped`);
       if (capped)  notes.push(`sending the first ${LOCATOR_CAP} of ${take.length + capped}`);
       if (notes.length) toast("Opening Project Locator — " + notes.join("; "));
-      window.open("https://trpa-agency.github.io/maps/tools/locator.html?eip=" + encodeURIComponent(take.join(",")), "_blank", "noopener");
+      window.open("https://trpa-agency.github.io/tools/qa/general/locator.html?eip=" + encodeURIComponent(take.join(",")), "_blank", "noopener");
     }
     document.getElementById("sel-to-locator").addEventListener("click", openLocatorWithSelection);
     // Header action: carries the selection when there is one, otherwise
     // just opens the locator fresh
     document.getElementById("header-locator").addEventListener("click", () => {
       if (state.selection.size) openLocatorWithSelection();
-      else window.open("https://trpa-agency.github.io/maps/tools/locator.html", "_blank", "noopener");
+      else window.open("https://trpa-agency.github.io/tools/qa/general/locator.html", "_blank", "noopener");
     });
 
     const showOnly = document.getElementById("sel-show-only");
